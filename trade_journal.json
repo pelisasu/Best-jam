@@ -34,5 +34,17 @@
     "tp4": 4256.8,
     "sl": 4308.64,
     "status": "SIGNAL_SENT"
+  },
+  {
+    "symbol": "frxXAUUSD",
+    "time": "2026-09-17T13:01:59.527052+07:00",
+    "signal": "BUY",
+    "entry": 4286.0,
+    "tp1": 4295.7,
+    "tp2": 4302.41,
+    "tp3": 4312.11,
+    "tp4": 4323.3,
+    "sl": 4278.54,
+    "status": "SIGNAL_SENT"
   }
 ]
