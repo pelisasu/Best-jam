@@ -1,4 +1,3 @@
-```python
 #!/usr/bin/env python3
 # ULTIMATE OMNI-BOT V21.3 - PURE DERIV WEBSOCKET SYNCED (frxXAUUSD)
 
