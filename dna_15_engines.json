@@ -1,81 +1,81 @@
 {
   "engines": {
     "NADI": {
-      "weight": 1.0201,
-      "wins": 2,
+      "weight": 1.030301,
+      "wins": 3,
       "loss": 0
     },
     "SAWAH": {
-      "weight": 1.0201,
-      "wins": 2,
+      "weight": 1.030301,
+      "wins": 3,
       "loss": 0
     },
     "SEMUT": {
-      "weight": 1.0201,
-      "wins": 2,
+      "weight": 1.030301,
+      "wins": 3,
       "loss": 0
     },
     "PADI": {
-      "weight": 0.9999,
-      "wins": 1,
+      "weight": 1.009899,
+      "wins": 2,
       "loss": 1
     },
     "AKAR": {
-      "weight": 0.9999,
-      "wins": 1,
+      "weight": 1.009899,
+      "wins": 2,
       "loss": 1
     },
     "WAYANG": {
-      "weight": 1.0201,
-      "wins": 2,
+      "weight": 1.030301,
+      "wins": 3,
       "loss": 0
     },
     "LUMPUR": {
-      "weight": 1.0201,
-      "wins": 2,
+      "weight": 1.030301,
+      "wins": 3,
       "loss": 0
     },
     "API": {
-      "weight": 1.0201,
-      "wins": 2,
+      "weight": 1.030301,
+      "wins": 3,
       "loss": 0
     },
     "ANGIN": {
-      "weight": 0.9999,
+      "weight": 0.989901,
       "wins": 1,
-      "loss": 1
+      "loss": 2
     },
     "KARANG": {
-      "weight": 1.0201,
-      "wins": 2,
+      "weight": 1.030301,
+      "wins": 3,
       "loss": 0
     },
     "EMBER": {
-      "weight": 0.9999,
-      "wins": 1,
+      "weight": 1.009899,
+      "wins": 2,
       "loss": 1
     },
     "KABUT": {
-      "weight": 1.0201,
-      "wins": 2,
+      "weight": 1.030301,
+      "wins": 3,
       "loss": 0
     },
     "JEJAK": {
-      "weight": 1.0201,
-      "wins": 2,
+      "weight": 1.030301,
+      "wins": 3,
       "loss": 0
     },
     "EMBUN": {
-      "weight": 1.0201,
-      "wins": 2,
+      "weight": 1.030301,
+      "wins": 3,
       "loss": 0
     },
     "MA_MACD_RSI": {
-      "weight": 1.0201,
-      "wins": 2,
+      "weight": 1.030301,
+      "wins": 3,
       "loss": 0
     }
   },
-  "total_runs": 2,
-  "evolve_gen": 2
+  "total_runs": 3,
+  "evolve_gen": 3
 }
