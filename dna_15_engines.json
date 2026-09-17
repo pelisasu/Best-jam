@@ -1,81 +1,81 @@
 {
   "engines": {
     "NADI": {
-      "weight": 1.0613078571860808,
-      "wins": 8,
+      "weight": 1.0719209357579416,
+      "wins": 9,
       "loss": 2
     },
     "SAWAH": {
-      "weight": 1.0613078571860808,
-      "wins": 8,
+      "weight": 1.0719209357579416,
+      "wins": 9,
       "loss": 2
     },
     "SEMUT": {
-      "weight": 1.0613078571860808,
-      "wins": 8,
+      "weight": 1.0719209357579416,
+      "wins": 9,
       "loss": 2
     },
     "PADI": {
-      "weight": 0.9412918627859214,
-      "wins": 2,
+      "weight": 0.9507047814137806,
+      "wins": 3,
       "loss": 8
     },
     "AKAR": {
-      "weight": 1.0402918600140796,
-      "wins": 7,
+      "weight": 1.0506947786142204,
+      "wins": 8,
       "loss": 3
     },
     "WAYANG": {
-      "weight": 1.0196920212019194,
+      "weight": 1.0094951009899003,
       "wins": 6,
-      "loss": 4
+      "loss": 5
     },
     "LUMPUR": {
-      "weight": 1.0196920212019194,
+      "weight": 1.0094951009899003,
       "wins": 6,
-      "loss": 4
+      "loss": 5
     },
     "API": {
-      "weight": 1.0402918600140791,
-      "wins": 7,
+      "weight": 1.05069477861422,
+      "wins": 8,
       "loss": 3
     },
     "ANGIN": {
-      "weight": 0.9995000999900006,
+      "weight": 0.9895050989901005,
       "wins": 5,
-      "loss": 5
+      "loss": 6
     },
     "KARANG": {
-      "weight": 1.0613078571860808,
+      "weight": 1.05069477861422,
       "wins": 8,
-      "loss": 2
+      "loss": 3
     },
     "EMBER": {
-      "weight": 0.9412918627859214,
+      "weight": 0.9318789441580622,
       "wins": 2,
-      "loss": 8
+      "loss": 9
     },
     "KABUT": {
-      "weight": 1.0196920212019194,
+      "weight": 1.0094951009899003,
       "wins": 6,
-      "loss": 4
-    },
-    "JEJAK": {
-      "weight": 0.9995000999900001,
-      "wins": 5,
       "loss": 5
     },
+    "JEJAK": {
+      "weight": 0.9895050989901001,
+      "wins": 5,
+      "loss": 6
+    },
     "EMBUN": {
-      "weight": 1.0196920212019194,
+      "weight": 1.0094951009899003,
       "wins": 6,
-      "loss": 4
+      "loss": 5
     },
     "MA_MACD_RSI": {
-      "weight": 0.9995000999900001,
-      "wins": 5,
+      "weight": 1.0094951009899,
+      "wins": 6,
       "loss": 5
     }
   },
-  "total_runs": 10,
-  "evolve_gen": 10
+  "total_runs": 11,
+  "evolve_gen": 11
 }
