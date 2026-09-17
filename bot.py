@@ -126,11 +126,11 @@ def fetch_klines(interval, limit):
     return df
 
 def fetch_price():
-    # Menggunakan sistem retry & fallback akurat agar harga selalu sinkron dengan MT5
+    # Perpanjang timeout dan beri jeda stabil antar retry khusus GitHub Actions
     url = "wss://ws.derivws.com/websockets/v3?app_id=1089"
     for attempt in range(3):
         try:
-            ws = websocket.create_connection(url, timeout=5)
+            ws = websocket.create_connection(url, timeout=8)
             req = {"ticks": SYMBOL}
             ws.send(json.dumps(req))
             
@@ -143,7 +143,7 @@ def fetch_price():
             ws.close()
         except Exception as e:
             log(f"Deriv WebSocket price retry {attempt+1} err: {e}")
-            time.sleep(1)
+            time.sleep(2)
     
     try:
         df_temp = fetch_klines("15m", 5)
@@ -152,7 +152,7 @@ def fetch_price():
     except:
         pass
     
-    return 4313.50  # Fallback terupdate sesuai harga market XAUUSD terkini
+    return 4313.50
 
 def atr(df, p=14):
     try:
