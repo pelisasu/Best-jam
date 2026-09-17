@@ -23,9 +23,9 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install --no-cache-dir pytz requests pandas matplotlib
+          pip install --no-cache-dir pytz requests pandas matplotlib websocket-client
 
-      - name: Jalankan Bot V21 (Pure Binance Gold)
+      - name: Jalankan Bot V21 (Pure Deriv WS)
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
