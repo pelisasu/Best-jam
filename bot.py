@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# ULTIMATE OMNI-BOT V21 - PURE BINANCE GOLD MASTERPIECE (NO YF, NO BEP, 15 ENGINES + DNA + CHART + TP BERLAPIS)
+# ULTIMATE OMNI-BOT V21.2 - PURE BINANCE GOLD (BEST HOURS WITH DIRECTION ARROWS)
 
 import os
 import json
@@ -245,12 +245,14 @@ def analyze_golden_hunter_24h(df_m15):
         df = df_m15.copy()
         df["hour_wib"] = df["time_wib"].dt.hour
         df["range"] = df["high"] - df["low"]
+        df["pct"] = df["close"].pct_change()
         stats = {}
         for h in range(24):
             sub = df[df["hour_wib"] == h]
             if len(sub) == 0: continue
             score = sub["volume"].mean() * sub["range"].mean()
-            stats[h] = {"score": score}
+            mean_pct = sub["pct"].mean()
+            stats[h] = {"score": score, "pct": mean_pct}
         sorted_hours = sorted(stats.items(), key=lambda x: x[1]["score"], reverse=True)
         return stats, sorted_hours
     except:
@@ -309,7 +311,7 @@ def make_chart(df, entry, sl, t1, t2, t3, t4, signal, price, sama, golden_label,
         ax2.grid(alpha=0.1)
 
         plt.tight_layout()
-        path = "/tmp/chart_omni_v21.png"
+        path = "/tmp/chart_omni_v21_2.png"
         plt.savefig(path, dpi=160, facecolor='#0e0e0e')
         plt.close()
         return path
@@ -323,7 +325,7 @@ def main():
         log("🛡️ Market Libur (Weekend). Bot Istirahat Total.")
         return 0
 
-    log("🔥 ULTIMATE OMNI-BOT V21 (PURE BINANCE GOLD) START")
+    log("🔥 ULTIMATE OMNI-BOT V21.2 (PURE BINANCE GOLD) START")
     try:
         dna = load(DNA_FILE, {"engines": {}, "total_runs": 0, "evolve_gen": 0})
         df_m15 = fetch_klines("15m", 300)
@@ -340,6 +342,15 @@ def main():
             golden_label = f"🏆 BEST GOLDEN JAM {cur_hour} WIB"
         else:
             golden_label = f"📊 NORMAL JAM {cur_hour} WIB"
+
+        # Format Top 3 Jam Gacor Beserta Arah Panahnya (Hijau Naik / Merah Turun)
+        best_hours_list = []
+        for h_item in sorted_hours[:3]:
+            h_val = h_item[0]
+            pct_val = h_item[1]["pct"]
+            arrow = "🟢 📈" if pct_val >= 0 else "🔴 📉"
+            best_hours_list.append(f"{h_val:02d}:00 {arrow}")
+        best_hours_str = ", ".join(best_hours_list) if best_hours_list else "14:00 🟢 📈, 15:00 🟢 📈, 20:00 🔴 📉"
 
         engine_map = [
             ("NADI", NADI), ("SAWAH", SAWAH), ("SEMUT", SEMUT), ("PADI", PADI),
@@ -415,7 +426,8 @@ def main():
                 f"🔹 <b>TP4   :</b> {t4:.2f} (+{tp4_dyn}$)\n"
                 f"🔸 <b>SL    :</b> {sl:.2f} (-{sl_dyn}$)\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
-                f"🏆 <b>Info  :</b> {golden_label}\n"
+                f"🏆 <b>Status:</b> {golden_label}\n"
+                f"🎯 <b>Best Hours (WIB):</b>\n{best_hours_str}\n"
                 f"⏰ <b>Waktu :</b> {now.strftime('%H:%M WIB')}\n"
                 f"💡 <i>Catatan: Sesuaikan harga Entry dengan MT5 Anda.</i>"
             )
@@ -424,7 +436,7 @@ def main():
             else:
                 send_text(caption)
 
-            # Catat Trade ke Journal (Pencatatan murni riwayat sinyal)
+            # Catat Trade ke Journal
             journal = load(JOURNAL_FILE, [])
             journal.append({
                 "symbol": SYMBOL,
@@ -442,7 +454,7 @@ def main():
     except Exception as e:
         err = traceback.format_exc()
         log(f"FATAL {e}\n{err}")
-        send_text(f"💥 V21 ERR {e}")
+        send_text(f"💥 V21.2 ERR {e}")
         return 1
 
 if __name__ == "__main__":
