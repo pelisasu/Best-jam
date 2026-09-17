@@ -1,0 +1,39 @@
+name: Ultimate Omni-Bot V21
+
+on:
+  schedule:
+    # Berjalan otomatis setiap 15 menit, Senin sampai Jumat
+    - cron: '*/15 * * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          pip install --no-cache-dir pytz requests pandas matplotlib
+
+      - name: Jalankan Bot V21 (Pure Binance Gold)
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python3 bot.py
+
+      - name: Commit DNA Evolving & Journal State
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "Auto-update V21 DNA & trade history [skip ci]"
+          file_pattern: "*.json"
