@@ -1,0 +1,81 @@
+{
+  "engines": {
+    "NADI": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    },
+    "SAWAH": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    },
+    "SEMUT": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    },
+    "PADI": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    },
+    "AKAR": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    },
+    "WAYANG": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    },
+    "LUMPUR": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    },
+    "API": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    },
+    "ANGIN": {
+      "weight": 0.99,
+      "wins": 0,
+      "loss": 1
+    },
+    "KARANG": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    },
+    "EMBER": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    },
+    "KABUT": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    },
+    "JEJAK": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    },
+    "EMBUN": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    },
+    "MA_MACD_RSI": {
+      "weight": 1.01,
+      "wins": 1,
+      "loss": 0
+    }
+  },
+  "total_runs": 1,
+  "evolve_gen": 1
+}
