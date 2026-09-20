@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# V24.5 MULTI-TF ANALYSIS (M15 + H1) + DYNAMIC FAILOVER + 10 CORE ENGINES
-import os, json, time, sys, random, math
+# V24.5 MULTI-TF ANALYSIS (M15 + H1) + DYNAMIC FAILOVER + 10 CORE ENGINES [FIXED VERSION]
+import os, json, time, sys
 from datetime import datetime, timedelta
 import pytz, requests, pandas as pd, yfinance as yf
 import websocket
@@ -10,7 +10,6 @@ import matplotlib.pyplot as plt
 plt.rcParams['axes.unicode_minus'] = False
 
 WIB = pytz.timezone("Asia/Jakarta")
-UTC = pytz.UTC
 TELE_TOKEN = os.getenv("TELEGRAM_TOKEN", "") or os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELE_CHAT = os.getenv("TELEGRAM_CHAT_ID", "")
 SYMBOL = os.getenv("DERIV_SYMBOL", "frxXAUUSD")
@@ -18,19 +17,24 @@ SYMBOL = os.getenv("DERIV_SYMBOL", "frxXAUUSD")
 DNA_FILE = "dna_10_engines.json"
 JOURNAL_FILE = "trade_journal.json"
 
-def log(m): print(f"[{datetime.now(WIB).strftime('%H:%M:%S %d-%m')} WIB] {m}")
+def log(m): 
+    print(f"[{datetime.now(WIB).strftime('%H:%M:%S %d-%m')} WIB] {m}")
 
 def send_text(m):
     if not TELE_TOKEN or not TELE_CHAT: return
     try:
-        requests.post(f"https://api.telegram.org/bot{TELE_TOKEN}/sendMessage", json={"chat_id": TELE_CHAT, "text": m, "parse_mode": "HTML"}, timeout=12)
-    except Exception as e: log(f"send text err {e}")
+        requests.post(f"https://api.telegram.org/bot{TELE_TOKEN}/sendMessage", 
+                      json={"chat_id": TELE_CHAT, "text": m, "parse_mode": "HTML"}, timeout=12)
+    except Exception as e: 
+        log(f"send text err {e}")
 
 def send_photo(cap, p):
     if not TELE_TOKEN or not TELE_CHAT: return
     try:
         with open(p, 'rb') as f:
-            requests.post(f"https://api.telegram.org/bot{TELE_TOKEN}/sendPhoto", data={"chat_id": TELE_CHAT, "caption": cap, "parse_mode": "HTML"}, files={"photo": f}, timeout=20)
+            requests.post(f"https://api.telegram.org/bot{TELE_TOKEN}/sendPhoto", 
+                          data={"chat_id": TELE_CHAT, "caption": cap, "parse_mode": "HTML"}, 
+                          files={"photo": f}, timeout=20)
     except Exception as e:
         log(f"photo err {e}")
         send_text(cap)
@@ -47,6 +51,7 @@ def save(p, d):
         with open(p, 'w') as f: json.dump(d, f, indent=2)
     except: pass
 
+# [FIX 2] WebSocket loop yang robust dengan timeout eksplisit
 def fetch_deriv(limit=300, gran=900):
     url = "wss://ws.derivws.com/websockets/v3?app_id=1089"
     for attempt in range(3):
@@ -54,17 +59,32 @@ def fetch_deriv(limit=300, gran=900):
         try:
             ws = websocket.create_connection(url, timeout=8)
             ws.send(json.dumps({"ticks_history": SYMBOL, "count": limit, "end": "latest", "granularity": gran, "style": "candles"}))
-            for _ in range(10):
+            
+            start_time = time.time()
+            candles_received = False
+            df, price = None, None
+            
+            # Tunggu maksimal 8 detik untuk respons candles, abaikan ping/message lain
+            while time.time() - start_time < 8:
                 res = json.loads(ws.recv())
-                if "candles" in res:
+                if "candles" in res and res["candles"]:
                     df = pd.DataFrame(res["candles"])
                     for c in ["close", "high", "low", "open"]:
                         df[c] = df[c].astype(float)
                     df["volume"] = 100.0
-                    ws.close()
                     price = float(df["close"].iloc[-1])
-                    return df, price
-            if ws: ws.close()
+                    candles_received = True
+                    break
+            
+            if ws:
+                try: ws.close()
+                except: pass
+                
+            if candles_received:
+                return df, price
+            else:
+                log(f"Deriv attempt {attempt+1}: Timeout atau tidak ada data candles.")
+                
         except Exception as e:
             log(f"Deriv attempt {attempt+1} err: {e}")
             if ws:
@@ -80,15 +100,29 @@ def fetch_binance_paxg():
     except: pass
     return None
 
+# [FIX 4] Penanganan kolom tanggal yfinance yang lebih aman & period diperpanjang untuk rolling(200)
 def fetch_yf_gc():
     try:
-        df = yf.Ticker("GC=F").history(period="2d", interval="15m")
-        if df is None or len(df) < 5: return None, None
+        # Period 5d memastikan kita mendapat >300 candle 15m untuk keamanan indikator rolling(200)
+        df = yf.Ticker("GC=F").history(period="5d", interval="15m")
+        if df is None or len(df) < 50: return None, None
+        
         price = float(df["Close"].iloc[-1])
-        df = df.reset_index().rename(columns={"Close": "close", "High": "high", "Low": "low", "Open": "open"})
-        df["volume"] = df["Volume"].astype(float) if "Volume" in df else 100.0
-        return df[["close", "high", "low", "open", "volume"]].tail(300), price
-    except: return None, None
+        df = df.reset_index()
+        
+        # Cari kolom tanggal secara dinamis (bisa 'Date' atau 'Datetime' tergantung versi yfinance)
+        date_col = next((c for c in df.columns if 'date' in c.lower()), None)
+        if not date_col: date_col = df.columns[0]
+        
+        df = df.rename(columns={date_col: "datetime", "Close": "close", "High": "high", "Low": "low", "Open": "open"})
+        df["volume"] = df["Volume"].astype(float) if "Volume" in df.columns else 100.0
+        
+        result_df = df[["datetime", "close", "high", "low", "open", "volume"]].tail(300)
+        result_df.set_index("datetime", inplace=True) # Pertahankan index waktu untuk charting
+        return result_df, price
+    except Exception as e:
+        log(f"YF GC=F err: {e}")
+        return None, None
 
 def get_failover_price_with_dynamic_offset():
     prices_source = "None"
@@ -110,6 +144,7 @@ def get_failover_price_with_dynamic_offset():
         if p_binance:
             raw_price = p_binance
             prices_source = "Binance PAXG"
+            # Catatan: Sesuai permintaan, logika failover campuran ini dipertahankan.
             df_m15, _ = fetch_yf_gc() 
             try: source_specific_offset = float(os.getenv("BINANCE_OFFSET", "0"))
             except: pass
@@ -136,7 +171,6 @@ def get_failover_price_with_dynamic_offset():
     
     log(f"Sumber: {prices_source} | Raw: {raw_price:.2f} | Offset: {total_offset:+.2f} | Final: {final_price:.2f}")
 
-    # Ambil Data H1 (Granularity 3600 detik = 1 Jam) dan H4
     df_h1, _ = fetch_deriv(200, 3600)
     if df_h1 is None: df_h1 = df_m15
     df_h4, _ = fetch_deriv(200, 14400)
@@ -162,7 +196,7 @@ def rsi(df, p=14):
         return 100 - 100 / (1 + rs)
     except: return pd.Series([50] * len(df))
 
-# 10 CORE ENGINES
+# 10 CORE ENGINES (Tidak diubah, logika sudah solid)
 def NADI(df):
     try:
         e9 = df["close"].ewm(9).mean().iloc[-1]; e21 = df["close"].ewm(21).mean().iloc[-1]; pr = df["close"].iloc[-1]
@@ -226,34 +260,56 @@ def EMBER(df):
         return (1, 1.0) if pr > ma10 else (-1, 1.0)
     except: return (0, 1.0)
 
+# [FIX 5] Evolusi DNA yang lebih stabil dengan mean reversion
 def evolve_dna(dna, engines_results, signal):
     if "engines" not in dna: dna["engines"] = {}
     for name, sc, _ in engines_results:
         if name not in dna["engines"]: dna["engines"][name] = {"weight": 1.0}
         curr = dna["engines"][name]["weight"]
-        target_adj = 0.015 if (sc > 0 and signal == "BUY") or (sc < 0 and signal == "SELL") else -0.01
-        new_w = max(0.8, min(1.6, curr * 0.985 + target_adj + (1.0 - curr) * 0.01))
+        
+        if sc != 0:
+            is_agree = (sc > 0 and signal == "BUY") or (sc < 0 and signal == "SELL")
+            target_adj = 0.01 if is_agree else -0.005
+        else:
+            target_adj = -0.002 # Penalti kecil untuk engine yang netral
+            
+        # Mean reversion: menarik bobot kembali ke 1.0 secara perlahan
+        mean_reversion = (1.0 - curr) * 0.01
+        new_w = max(0.5, min(2.0, curr + target_adj + mean_reversion))
         dna["engines"][name]["weight"] = round(new_w, 4)
     return dna
 
+# [FIX 3] Perbaikan sumbu X chart agar tidak terdistorsi
 def make_chart(df, entry, sl, t1, t2, t3, t4, signal, conf, atr_m15):
     try:
         plt.figure(figsize=(10, 6))
-        sub = df.tail(80)
-        plt.plot(sub["close"].values, label="M15 Price", color="gold", linewidth=1.5)
+        sub = df.tail(80).copy()
+        
+        # Gunakan index waktu jika tersedia, jika tidak, gunakan range integer
+        if isinstance(sub.index, pd.DatetimeIndex):
+            x_vals = sub.index
+            plt.xticks(rotation=45, fontsize=8)
+        else:
+            x_vals = range(len(sub))
+            
+        plt.plot(x_vals, sub["close"].values, label="M15 Price", color="gold", linewidth=1.5)
         plt.axhline(entry, color="cyan", label=f"Entry {entry:.2f}")
         plt.axhline(sl, color="red", label=f"SL {sl:.2f}")
         plt.axhline(t1, color="green", linestyle=":", label="TP1")
         plt.axhline(t3, color="green", linestyle="-", label="TP3")
+        
         plt.title(f"M15+H1 Analysis | {signal} Score: {conf:.0f}% | ATR: {atr_m15}")
         plt.legend(fontsize=8)
         plt.grid(alpha=0.3)
         plt.tight_layout()
+        
         path = "/tmp/chart_v245.png"
         plt.savefig(path, dpi=150)
-        plt.close()
+        plt.close('all') # [FIX 6] Mencegah kebocoran memori
         return path
-    except: return None
+    except Exception as e:
+        log(f"Chart generation error: {e}")
+        return None
 
 def main():
     log("V24.5 MULTI-TF ANALYSIS (M15+H1) START")
@@ -297,11 +353,16 @@ def main():
     h1_trend_text = get_trend_label(df_h1)
     h1_rsi_val = float(rsi(df_h1).iloc[-1])
 
-    # Tambahkan bobot tren H1 ke skor akhir
     if "BULLISH" in h1_trend_text: buy_w += 2.0
     elif "BEARISH" in h1_trend_text: sell_w += 2.0
 
     total_w = buy_w + sell_w
+    
+    # [FIX 4] Penanganan kondisi netral untuk mencegah sinyal palsu
+    if total_w == 0:
+        log("Konsensus pasar NETRAL (0%). Tidak ada sinyal BUY atau SELL yang kuat. Lewati eksekusi.")
+        return 0
+
     consensus = (max(buy_w, sell_w) / total_w * 100) if total_w > 0 else 50.0
     signal = "BUY" if buy_w > sell_w else "SELL"
 
