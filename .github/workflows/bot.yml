@@ -1,40 +1,53 @@
-name: V24.2 ULTIMATE OMNI-BOT
+name: V24.5 ULTIMATE OMNI-BOT
 
 on:
   schedule:
-    # Berjalan otomatis setiap 15 menit dengan offset menit agar tidak antre
+    # CATATAN: GitHub Actions cron berjalan dalam UTC.
+    # '7,22,37,52 * * * 1-5' UTC = 07:07, 07:22, 07:37, 07:52 WIB (Senin-Jumat).
+    # Pastikan ini sesuai dengan waktu eksekusi yang Anda inginkan.
     - cron: '7,22,37,52 * * * 1-5'
-  workflow_dispatch:
+  workflow_dispatch: # Memungkinkan eksekusi manual untuk testing
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # Diperlukan untuk git-auto-commit-action
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Penting: memastikan history git lengkap untuk commit yang andal
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+          cache: 'pip' # Mempercepat instalasi dependensi di run berikutnya
 
       - name: Install Dependencies
         run: |
-          pip install --no-cache-dir pytz requests pandas matplotlib websocket-client yfinance
+          # Menambahkan lxml dan beautifulsoup4 untuk stabilitas yfinance di lingkungan headless Linux
+          pip install --no-cache-dir pytz requests pandas matplotlib websocket-client yfinance lxml beautifulsoup4
 
-      - name: Jalankan Bot V24.2 (Multi-Source & MT5 Sync)
+      - name: Jalankan Bot V24.5 (Multi-Source & MT5 Sync)
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          MT5_OFFSET: ${{ secrets.MT5_OFFSET }}
+          # Tambahkan offset lain jika Anda ingin mengontrolnya via GitHub Secrets
+          DERIV_SYMBOL: ${{ secrets.DERIV_SYMBOL || 'frxXAUUSD' }}
+          MT5_OFFSET: ${{ secrets.MT5_OFFSET || '0' }}
+          DERIV_OFFSET: ${{ secrets.DERIV_OFFSET || '0' }}
+          BINANCE_OFFSET: ${{ secrets.BINANCE_OFFSET || '0' }}
+          YAHOO_OFFSET: ${{ secrets.YAHOO_OFFSET || '-46.50' }}
         run: |
+          echo "Memulai eksekusi bot pada waktu UTC: $(date -u)"
           python3 bot.py
 
       - name: Commit DNA Evolving & Journal State
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Auto-update V24.2 DNA & trade history [skip ci]"
-          file_pattern: "*.json"
+          commit_message: "chore: auto-update V24.5 DNA & trade history [skip ci]"
+          file_pattern: "**/*.json" # ** memastikan file json di subfolder juga terdeteksi
+          commit_options: "--no-verify"
