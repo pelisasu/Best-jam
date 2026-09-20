@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# V24.3 ULTIMATE FAILOVER-SYNCHRONIZED + 10 CORE ENGINES + ROBUST SAFETY
+# V24.5 MULTI-TF ANALYSIS (M15 + H1) + DYNAMIC FAILOVER + 10 CORE ENGINES
 import os, json, time, sys, random, math
 from datetime import datetime, timedelta
 import pytz, requests, pandas as pd, yfinance as yf
@@ -90,28 +90,30 @@ def fetch_yf_gc():
         return df[["close", "high", "low", "open", "volume"]].tail(300), price
     except: return None, None
 
-def get_failover_price():
+def get_failover_price_with_dynamic_offset():
     prices_source = "None"
     raw_price = None
     df_m15 = None
+    source_specific_offset = 0.0
 
-    # 1. Prioritas Utama: Deriv WebSocket
     log("Mencoba mengambil harga dari Deriv WebSocket...")
     df_m15, p_deriv = fetch_deriv(300, 900)
     if p_deriv:
         raw_price = p_deriv
         prices_source = "Deriv WebSocket"
+        try: source_specific_offset = float(os.getenv("DERIV_OFFSET", "0"))
+        except: pass
 
-    # 2. Cadangan 1: Binance PAXG
     if raw_price is None:
         log("Deriv WebSocket gagal, beralih ke Binance PAXG...")
         p_binance = fetch_binance_paxg()
         if p_binance:
             raw_price = p_binance
             prices_source = "Binance PAXG"
-            df_m15, _ = fetch_yf_gc() # Gunakan struktur YF sebagai fallback dataframe M15
+            df_m15, _ = fetch_yf_gc() 
+            try: source_specific_offset = float(os.getenv("BINANCE_OFFSET", "0"))
+            except: pass
 
-    # 3. Cadangan Terakhir: Yahoo Finance (GC=F)
     if raw_price is None:
         log("Binance gagal, beralih ke Yahoo Finance (GC=F)...")
         df_yf, p_yf = fetch_yf_gc()
@@ -119,25 +121,28 @@ def get_failover_price():
             raw_price = p_yf
             prices_source = "Yahoo GC=F"
             df_m15 = df_yf
+            try: source_specific_offset = float(os.getenv("YAHOO_OFFSET", "-46.50"))
+            except: source_specific_offset = -46.50
 
     if raw_price is None or df_m15 is None:
-        raise RuntimeError("Kritis: Seluruh sumber harga (Deriv, Binance, Yahoo) gagal diakses!")
+        raise RuntimeError("Kritis: Seluruh sumber harga gagal diakses!")
 
-    mt5_offset = 0.0
-    try:
-        mt5_offset = float(os.getenv("MT5_OFFSET", "0"))
+    global_mt5_offset = 0.0
+    try: global_mt5_offset = float(os.getenv("MT5_OFFSET", "0"))
     except: pass
 
-    final_price = raw_price + mt5_offset
-    log(f"Sumber Terpilih: {prices_source} | Raw Price: {raw_price:.2f} | MT5 Offset: {mt5_offset:+.2f} | Final: {final_price:.2f}")
+    total_offset = source_specific_offset + global_mt5_offset
+    final_price = raw_price + total_offset
+    
+    log(f"Sumber: {prices_source} | Raw: {raw_price:.2f} | Offset: {total_offset:+.2f} | Final: {final_price:.2f}")
 
-    # Ambil tren H1 dan H4
+    # Ambil Data H1 (Granularity 3600 detik = 1 Jam) dan H4
     df_h1, _ = fetch_deriv(200, 3600)
     if df_h1 is None: df_h1 = df_m15
     df_h4, _ = fetch_deriv(200, 14400)
     if df_h4 is None: df_h4 = df_h1
 
-    return final_price, df_m15, df_h1, df_h4, prices_source, mt5_offset
+    return final_price, df_m15, df_h1, df_h4, prices_source, total_offset
 
 def calc_atr(df, period=14):
     try:
@@ -235,28 +240,28 @@ def make_chart(df, entry, sl, t1, t2, t3, t4, signal, conf, atr_m15):
     try:
         plt.figure(figsize=(10, 6))
         sub = df.tail(80)
-        plt.plot(sub["close"].values, label="Price", color="gold", linewidth=1.5)
+        plt.plot(sub["close"].values, label="M15 Price", color="gold", linewidth=1.5)
         plt.axhline(entry, color="cyan", label=f"Entry {entry:.2f}")
         plt.axhline(sl, color="red", label=f"SL {sl:.2f}")
         plt.axhline(t1, color="green", linestyle=":", label="TP1")
         plt.axhline(t3, color="green", linestyle="-", label="TP3")
-        plt.title(f"{signal} Score: {conf:.0f}% | ATR: {atr_m15}")
+        plt.title(f"M15+H1 Analysis | {signal} Score: {conf:.0f}% | ATR: {atr_m15}")
         plt.legend(fontsize=8)
         plt.grid(alpha=0.3)
         plt.tight_layout()
-        path = "/tmp/chart_v243.png"
+        path = "/tmp/chart_v245.png"
         plt.savefig(path, dpi=150)
         plt.close()
         return path
     except: return None
 
 def main():
-    log("V24.3 FAILOVER-SYNCHRONIZED START")
+    log("V24.5 MULTI-TF ANALYSIS (M15+H1) START")
     dna = load(DNA_FILE, {"engines": {}})
     journal = load(JOURNAL_FILE, [])
 
     try:
-        price, df_m15, df_h1, df_h4, source_name, mt5_offset = get_failover_price()
+        price, df_m15, df_h1, df_h4, source_name, total_offset = get_failover_price_with_dynamic_offset()
     except Exception as e:
         log(f"Gagal total mengambil harga: {e}")
         return 1
@@ -275,23 +280,26 @@ def main():
             dna_w = dna.get("engines", {}).get(name, {}).get("weight", 1.0)
             w = base_w * dna_w
             engines_results.append((name, sc, w))
-            if sc > 0: 
-                buy_w += w * abs(sc)
-            elif sc < 0: 
-                sell_w += w * abs(sc)
+            if sc > 0: buy_w += w * abs(sc)
+            elif sc < 0: sell_w += w * abs(sc)
         except Exception as ex:
             log(f"Engine {name} error: {ex}")
 
-    def trend(df):
+    def get_trend_label(df):
         try:
             s50 = df["close"].rolling(50).mean().iloc[-1]
             pr = df["close"].iloc[-1]
-            return 1 if pr > s50 else (-1 if pr < s50 else 0)
-        except: return 0
+            if pr > s50: return "BULLISH (UP)"
+            elif pr < s50: return "BEARISH (DOWN)"
+            return "SIDEWAYS"
+        except: return "NEUTRAL"
 
-    h1_tr = trend(df_h1); h4_tr = trend(df_h4)
-    if h1_tr == 1: buy_w += 1.5
-    elif h1_tr == -1: sell_w += 1.5
+    h1_trend_text = get_trend_label(df_h1)
+    h1_rsi_val = float(rsi(df_h1).iloc[-1])
+
+    # Tambahkan bobot tren H1 ke skor akhir
+    if "BULLISH" in h1_trend_text: buy_w += 2.0
+    elif "BEARISH" in h1_trend_text: sell_w += 2.0
 
     total_w = buy_w + sell_w
     consensus = (max(buy_w, sell_w) / total_w * 100) if total_w > 0 else 50.0
@@ -328,20 +336,20 @@ def main():
     save(JOURNAL_FILE, journal)
 
     chart_path = make_chart(df_m15, entry, sl, t1, t2, t3, t4, signal, consensus, round(atr_m15, 2))
-    offset_info = f"\n⚙️ <b>MT5 Offset:</b> {mt5_offset:+.2f}$" if mt5_offset != 0 else ""
+    offset_info = f"\n⚙️ <b>Offset:</b> {total_offset:+.2f}$" if total_offset != 0 else ""
 
     caption = (
-        f"💎 <b>V24.3 FAILOVER - {signal} ({consensus:.0f}%)</b>\n"
+        f"💎 <b>V24.5 MULTI-TF (M15 + H1) - {signal} ({consensus:.0f}%)</b>\n"
         f"━━━━━━━━━━━━\n"
-        f"📡 <b>Sumber:</b> {source_name}\n"
-        f"<b>Adjusted Price:</b> {price:.2f} {offset_info}\n"
+        f"📡 <b>Sumber:</b> {source_name} {offset_info}\n"
+        f"📊 <b>Analisis TF H1:</b> {h1_trend_text} (RSI: {h1_rsi_val:.1f})\n"
         f"━━━━━━━━━━━━\n"
-        f"<b>Entry:</b> {entry:.2f}\n"
+        f"<b>Entry Price:</b> {entry:.2f}\n"
         f"<b>SL:</b> {round(sl,2)} (-{round(sl_base,2)}$)\n"
         f"<b>TP1:</b> {round(t1,2)} | <b>TP2:</b> {round(t2,2)}\n"
         f"<b>TP3:</b> {round(t3,2)} | <b>TP4:</b> {round(t4,2)}\n"
         f"━━━━━━━━━━━━\n"
-        f"🎯 Failover Active & Synced | {datetime.now(WIB).strftime('%H:%M WIB')}"
+        f"🎯 M15+H1 Synchronized | {datetime.now(WIB).strftime('%H:%M WIB')}"
     )
 
     if chart_path and os.path.exists(chart_path):
@@ -349,7 +357,7 @@ def main():
     else:
         send_text(caption)
     
-    log(f"SINYAL FAILOVER BERHASIL DIKIRIM: {signal} di {entry:.2f} ({consensus:.0f}%) dari {source_name}")
+    log(f"SINYAL M15+H1 BERHASIL DIKIRIM: {signal} di {entry:.2f} ({consensus:.0f}%)")
     return 0
 
 if __name__ == "__main__":
