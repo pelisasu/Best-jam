@@ -1,0 +1,24 @@
+name: Run Backtest Simulation
+
+on:
+  workflow_dispatch: # Membuat tombol "Run workflow" manual di tab Actions
+
+jobs:
+  run-simulation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas yfinance requests
+
+      - name: Run simulation script
+        run: |
+          python simulate_hit_rate.py
