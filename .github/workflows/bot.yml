@@ -1,9 +1,9 @@
-name: Ultimate Omni-Bot V21
+name: V24.2 ULTIMATE OMNI-BOT
 
 on:
   schedule:
-    # Berjalan otomatis setiap 15 menit, Senin sampai Jumat
-    - cron: '*/15 * * * 1-5'
+    # Berjalan otomatis setiap 15 menit dengan offset menit agar tidak antre
+    - cron: '7,22,37,52 * * * 1-5'
   workflow_dispatch:
 
 jobs:
@@ -23,17 +23,18 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install --no-cache-dir pytz requests pandas matplotlib websocket-client
+          pip install --no-cache-dir pytz requests pandas matplotlib websocket-client yfinance
 
-      - name: Jalankan Bot V21 (Pure Deriv WS)
+      - name: Jalankan Bot V24.2 (Multi-Source & MT5 Sync)
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MT5_OFFSET: ${{ secrets.MT5_OFFSET }}
         run: |
           python3 bot.py
 
       - name: Commit DNA Evolving & Journal State
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "Auto-update V21 DNA & trade history [skip ci]"
+          commit_message: "Auto-update V24.2 DNA & trade history [skip ci]"
           file_pattern: "*.json"
