@@ -82,7 +82,6 @@ def run_simulation():
                         hit = True
                         break
             if not hit:
-            def hit:
                 status = "BERJALAN (FLAT)"
                 pending += 1
 
