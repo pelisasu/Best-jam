@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# V24.5 MULTI-TF ANALYSIS (M15 + H1) + DYNAMIC FAILOVER + 10 CORE ENGINES [FIXED VERSION]
+# V24.6 ULTIMATE OMNI-BOT (News Filter + True DNA Evolution + Health Check)
 import os, json, time, sys
 from datetime import datetime, timedelta
 import pytz, requests, pandas as pd, yfinance as yf
@@ -10,12 +10,14 @@ import matplotlib.pyplot as plt
 plt.rcParams['axes.unicode_minus'] = False
 
 WIB = pytz.timezone("Asia/Jakarta")
+UTC = pytz.UTC
 TELE_TOKEN = os.getenv("TELEGRAM_TOKEN", "") or os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELE_CHAT = os.getenv("TELEGRAM_CHAT_ID", "")
 SYMBOL = os.getenv("DERIV_SYMBOL", "frxXAUUSD")
 
 DNA_FILE = "dna_10_engines.json"
 JOURNAL_FILE = "trade_journal.json"
+FAILURE_FILE = "failure_count.json"
 
 def log(m): 
     print(f"[{datetime.now(WIB).strftime('%H:%M:%S %d-%m')} WIB] {m}")
@@ -39,6 +41,11 @@ def send_photo(cap, p):
         log(f"photo err {e}")
         send_text(cap)
 
+# [FIX 3] Health Check: Emergency Alert
+def send_emergency_alert(msg):
+    alert_msg = f"🚨 <b>EMERGENCY ALERT</b>\nBot V24.6 mengalami kegagalan kritis:\n\n<code>{msg}</code>\n\nSegera periksa log GitHub Actions atau server Anda."
+    send_text(alert_msg)
+
 def load(p, d):
     try:
         if os.path.exists(p):
@@ -51,7 +58,6 @@ def save(p, d):
         with open(p, 'w') as f: json.dump(d, f, indent=2)
     except: pass
 
-# [FIX 2] WebSocket loop yang robust dengan timeout eksplisit
 def fetch_deriv(limit=300, gran=900):
     url = "wss://ws.derivws.com/websockets/v3?app_id=1089"
     for attempt in range(3):
@@ -64,7 +70,6 @@ def fetch_deriv(limit=300, gran=900):
             candles_received = False
             df, price = None, None
             
-            # Tunggu maksimal 8 detik untuk respons candles, abaikan ping/message lain
             while time.time() - start_time < 8:
                 res = json.loads(ws.recv())
                 if "candles" in res and res["candles"]:
@@ -100,17 +105,13 @@ def fetch_binance_paxg():
     except: pass
     return None
 
-# [FIX 4] Penanganan kolom tanggal yfinance yang lebih aman & period diperpanjang untuk rolling(200)
 def fetch_yf_gc():
     try:
-        # Period 5d memastikan kita mendapat >300 candle 15m untuk keamanan indikator rolling(200)
         df = yf.Ticker("GC=F").history(period="5d", interval="15m")
         if df is None or len(df) < 50: return None, None
         
         price = float(df["Close"].iloc[-1])
         df = df.reset_index()
-        
-        # Cari kolom tanggal secara dinamis (bisa 'Date' atau 'Datetime' tergantung versi yfinance)
         date_col = next((c for c in df.columns if 'date' in c.lower()), None)
         if not date_col: date_col = df.columns[0]
         
@@ -118,7 +119,7 @@ def fetch_yf_gc():
         df["volume"] = df["Volume"].astype(float) if "Volume" in df.columns else 100.0
         
         result_df = df[["datetime", "close", "high", "low", "open", "volume"]].tail(300)
-        result_df.set_index("datetime", inplace=True) # Pertahankan index waktu untuk charting
+        result_df.set_index("datetime", inplace=True)
         return result_df, price
     except Exception as e:
         log(f"YF GC=F err: {e}")
@@ -144,7 +145,6 @@ def get_failover_price_with_dynamic_offset():
         if p_binance:
             raw_price = p_binance
             prices_source = "Binance PAXG"
-            # Catatan: Sesuai permintaan, logika failover campuran ini dipertahankan.
             df_m15, _ = fetch_yf_gc() 
             try: source_specific_offset = float(os.getenv("BINANCE_OFFSET", "0"))
             except: pass
@@ -178,6 +178,34 @@ def get_failover_price_with_dynamic_offset():
 
     return final_price, df_m15, df_h1, df_h4, prices_source, total_offset
 
+# [FIX 1] Filter Berita High Impact (Menggunakan ForexFactory Public JSON)
+def check_high_impact_news():
+    try:
+        url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+        response = requests.get(url, timeout=5)
+        if response.status_code == 200:
+            events = response.json()
+            now = datetime.now(UTC)
+            for event in events:
+                # Filter untuk negara USD atau XAU dengan impact High/Red
+                country = event.get('country', '')
+                impact = event.get('impact', '')
+                if country in ['USD', 'XAU'] and impact in ['High', 'Red']:
+                    try:
+                        # Format tanggal FF: "2023-10-27T12:30:00.000Z"
+                        event_time = datetime.fromisoformat(event['date'].replace('Z', '+00:00'))
+                        time_diff = event_time - now
+                        # Cek jika berita terjadi dalam 90 menit ke depan atau 30 menit yang lalu
+                        if timedelta(minutes=-30) <= time_diff <= timedelta(minutes=90):
+                            log(f"⚠️ BERITA HIGH IMPACT TERDETEKSI: {event.get('title', 'Unknown')} pada {event_time.astimezone(WIB).strftime('%H:%M WIB')}")
+                            return True
+                    except:
+                        continue
+        return False
+    except Exception as e:
+        log(f"Gagal cek berita (filter diabaikan): {e}")
+        return False # Fail-open: jika API berita gagal, jangan blokir trading
+
 def calc_atr(df, period=14):
     try:
         hl = df["high"] - df["low"]
@@ -196,7 +224,7 @@ def rsi(df, p=14):
         return 100 - 100 / (1 + rs)
     except: return pd.Series([50] * len(df))
 
-# 10 CORE ENGINES (Tidak diubah, logika sudah solid)
+# 10 CORE ENGINES
 def NADI(df):
     try:
         e9 = df["close"].ewm(9).mean().iloc[-1]; e21 = df["close"].ewm(21).mean().iloc[-1]; pr = df["close"].iloc[-1]
@@ -260,32 +288,66 @@ def EMBER(df):
         return (1, 1.0) if pr > ma10 else (-1, 1.0)
     except: return (0, 1.0)
 
-# [FIX 5] Evolusi DNA yang lebih stabil dengan mean reversion
-def evolve_dna(dna, engines_results, signal):
-    if "engines" not in dna: dna["engines"] = {}
-    for name, sc, _ in engines_results:
-        if name not in dna["engines"]: dna["engines"][name] = {"weight": 1.0}
-        curr = dna["engines"][name]["weight"]
-        
-        if sc != 0:
-            is_agree = (sc > 0 and signal == "BUY") or (sc < 0 and signal == "SELL")
-            target_adj = 0.01 if is_agree else -0.005
-        else:
-            target_adj = -0.002 # Penalti kecil untuk engine yang netral
+# [FIX 2] True DNA Evolution: Menyesuaikan bobot berdasarkan hasil trade masa lalu
+def evaluate_and_evolve_dna_from_journal(dna, journal, current_price):
+    if "engines" not in dna: dna["engines"] = {name: {"weight": 1.0} for name, _ in engine_map}
+    
+    updated = False
+    for trade in journal:
+        if trade.get("evaluated"): 
+            continue # Sudah dievaluasi sebelumnya
             
-        # Mean reversion: menarik bobot kembali ke 1.0 secara perlahan
-        mean_reversion = (1.0 - curr) * 0.01
-        new_w = max(0.5, min(2.0, curr + target_adj + mean_reversion))
-        dna["engines"][name]["weight"] = round(new_w, 4)
+        # Cek apakah trade sudah cukup lama (minimal 2 jam) untuk dianggap "selesai" atau kena SL/TP
+        trade_time = datetime.fromisoformat(trade["time"])
+        if (datetime.now(WIB) - trade_time).total_seconds() < 7200:
+            continue
+
+        signal = trade["signal"]
+        sl = trade["sl"]
+        tp1 = trade["tp1"]
+        engine_states = trade.get("engine_states", {})
+        
+        result = None
+        if signal == "BUY":
+            if current_price >= tp1: result = "WIN"
+            elif current_price <= sl: result = "LOSS"
+        else: # SELL
+            if current_price <= tp1: result = "WIN"
+            elif current_price >= sl: result = "LOSS"
+
+        if result:
+            log(f"📊 Evaluasi Trade Masa Lalu: {signal} @ {trade['price']} -> {result}")
+            for name, state in engine_states.items():
+                if name in dna["engines"]:
+                    curr_w = dna["engines"][name]["weight"]
+                    # Jika engine searah dengan sinyal yang WIN, naikkan bobot. Jika LOSS, turunkan.
+                    was_bullish = state.get("sc", 0) > 0
+                    should_have_been_bullish = (signal == "BUY" and result == "WIN") or (signal == "SELL" and result == "LOSS")
+                    
+                    if was_bullish == should_have_been_bullish:
+                        # Engine benar, naikkan bobot (max 2.0)
+                        new_w = min(2.0, curr_w + 0.05)
+                    else:
+                        # Engine salah, turunkan bobot (min 0.5)
+                        new_w = max(0.5, curr_w - 0.05)
+                    
+                    # Mean reversion ringan
+                    new_w = new_w * 0.99 + 1.0 * 0.01
+                    dna["engines"][name]["weight"] = round(new_w, 4)
+            
+            trade["evaluated"] = True
+            trade["result"] = result
+            updated = True
+
+    if updated:
+        save(JOURNAL_FILE, journal)
     return dna
 
-# [FIX 3] Perbaikan sumbu X chart agar tidak terdistorsi
 def make_chart(df, entry, sl, t1, t2, t3, t4, signal, conf, atr_m15):
     try:
         plt.figure(figsize=(10, 6))
         sub = df.tail(80).copy()
         
-        # Gunakan index waktu jika tersedia, jika tidak, gunakan range integer
         if isinstance(sub.index, pd.DatetimeIndex):
             x_vals = sub.index
             plt.xticks(rotation=45, fontsize=8)
@@ -303,32 +365,54 @@ def make_chart(df, entry, sl, t1, t2, t3, t4, signal, conf, atr_m15):
         plt.grid(alpha=0.3)
         plt.tight_layout()
         
-        path = "/tmp/chart_v245.png"
+        path = "/tmp/chart_v246.png"
         plt.savefig(path, dpi=150)
-        plt.close('all') # [FIX 6] Mencegah kebocoran memori
+        plt.close('all')
         return path
     except Exception as e:
         log(f"Chart generation error: {e}")
         return None
 
+# Deklarasi global agar bisa diakses oleh fungsi evaluasi
+engine_map = [
+    ("NADI", NADI), ("SAWAH", SAWAH), ("SEMUT", SEMUT), ("PADI", PADI), ("AKAR", AKAR),
+    ("WAYANG", WAYANG), ("LUMPUR", LUMPUR), ("API", API), ("ANGIN", ANGIN), ("EMBER", EMBER)
+]
+
 def main():
-    log("V24.5 MULTI-TF ANALYSIS (M15+H1) START")
+    log("V24.6 MULTI-TF ANALYSIS (M15+H1) START")
     dna = load(DNA_FILE, {"engines": {}})
     journal = load(JOURNAL_FILE, [])
 
+    # [FIX 1] Cek Filter Berita
+    if check_high_impact_news():
+        log("⛔ Trading dibatalkan sementara karena ada berita High Impact. Aman.")
+        return 0
+
+    # [FIX 3] Health Check: Reset atau Hitung Kegagalan
+    fail_count = load(FAILURE_FILE, {"count": 0})
+    
     try:
         price, df_m15, df_h1, df_h4, source_name, total_offset = get_failover_price_with_dynamic_offset()
+        # Sukses: reset counter
+        fail_count["count"] = 0
+        save(FAILURE_FILE, fail_count)
     except Exception as e:
-        log(f"Gagal total mengambil harga: {e}")
+        fail_count["count"] += 1
+        save(FAILURE_FILE, fail_count)
+        err_msg = f"Gagal total mengambil harga: {e}"
+        log(err_msg)
+        if fail_count["count"] >= 2:
+            send_emergency_alert(f"{err_msg}\n(Gagal {fail_count['count']}x berturut-turut)")
         return 1
 
-    engine_map = [
-        ("NADI", NADI), ("SAWAH", SAWAH), ("SEMUT", SEMUT), ("PADI", PADI), ("AKAR", AKAR),
-        ("WAYANG", WAYANG), ("LUMPUR", LUMPUR), ("API", API), ("ANGIN", ANGIN), ("EMBER", EMBER)
-    ]
+    # [FIX 2] Evaluasi trade masa lalu sebelum membuat sinyal baru
+    dna = evaluate_and_evolve_dna_from_journal(dna, journal, price)
+    save(DNA_FILE, dna)
     
     buy_w = sell_w = 0.0
     engines_results = []
+    current_engine_states = {} # Simpan state untuk evaluasi di masa depan
     
     for name, fn in engine_map:
         try:
@@ -336,6 +420,8 @@ def main():
             dna_w = dna.get("engines", {}).get(name, {}).get("weight", 1.0)
             w = base_w * dna_w
             engines_results.append((name, sc, w))
+            current_engine_states[name] = {"sc": sc, "weight_used": round(w, 4)}
+            
             if sc > 0: buy_w += w * abs(sc)
             elif sc < 0: sell_w += w * abs(sc)
         except Exception as ex:
@@ -358,7 +444,6 @@ def main():
 
     total_w = buy_w + sell_w
     
-    # [FIX 4] Penanganan kondisi netral untuk mencegah sinyal palsu
     if total_w == 0:
         log("Konsensus pasar NETRAL (0%). Tidak ada sinyal BUY atau SELL yang kuat. Lewati eksekusi.")
         return 0
@@ -380,16 +465,16 @@ def main():
         sl = entry + sl_base
         t1, t2, t3, t4 = entry - (sl_base*1.3), entry - (sl_base*2.2), entry - (sl_base*3.5), entry - (sl_base*5.0)
 
-    dna = evolve_dna(dna, engines_results, signal)
-    save(DNA_FILE, dna)
-
     if consensus < 60:
         log(f"Konsensus pasar {consensus:.0f}% < 60%. Lewati eksekusi sinyal.")
         return 0
 
     trade_entry = {
         "time": datetime.now(WIB).isoformat(), "signal": signal, "price": entry,
-        "sl": round(sl, 2), "tp1": round(t1, 2), "tp2": round(t2, 2), "tp3": round(t3, 2), "tp4": round(t4, 2), "consensus": round(consensus, 2)
+        "sl": round(sl, 2), "tp1": round(t1, 2), "tp2": round(t2, 2), "tp3": round(t3, 2), "tp4": round(t4, 2), 
+        "consensus": round(consensus, 2),
+        "engine_states": current_engine_states, # Simpan untuk evaluasi nanti
+        "evaluated": False
     }
     
     journal.append(trade_entry)
@@ -400,7 +485,7 @@ def main():
     offset_info = f"\n⚙️ <b>Offset:</b> {total_offset:+.2f}$" if total_offset != 0 else ""
 
     caption = (
-        f"💎 <b>V24.5 MULTI-TF (M15 + H1) - {signal} ({consensus:.0f}%)</b>\n"
+        f"💎 <b>V24.6 MULTI-TF (M15 + H1) - {signal} ({consensus:.0f}%)</b>\n"
         f"━━━━━━━━━━━━\n"
         f"📡 <b>Sumber:</b> {source_name} {offset_info}\n"
         f"📊 <b>Analisis TF H1:</b> {h1_trend_text} (RSI: {h1_rsi_val:.1f})\n"
