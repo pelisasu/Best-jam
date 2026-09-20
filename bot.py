@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# V24.2 ULTIMATE OFFSET-SYNCHRONIZED + 10 CORE ENGINES + ROBUST SAFETY + JOURNAL CLEANUP
+# V24.3 ULTIMATE FAILOVER-SYNCHRONIZED + 10 CORE ENGINES + ROBUST SAFETY
 import os, json, time, sys, random, math
 from datetime import datetime, timedelta
 import pytz, requests, pandas as pd, yfinance as yf
@@ -90,43 +90,54 @@ def fetch_yf_gc():
         return df[["close", "high", "low", "open", "volume"]].tail(300), price
     except: return None, None
 
-def get_multi_source_price():
-    prices = {}
+def get_failover_price():
+    prices_source = "None"
+    raw_price = None
+    df_m15 = None
+
+    # 1. Prioritas Utama: Deriv WebSocket
+    log("Mencoba mengambil harga dari Deriv WebSocket...")
     df_m15, p_deriv = fetch_deriv(300, 900)
-    if p_deriv: prices["Deriv"] = p_deriv
-    
-    p_binance = fetch_binance_paxg()
-    if p_binance: prices["Binance PAXG"] = p_binance
-    
-    df_yf, p_yf = fetch_yf_gc()
-    if p_yf: 
-        prices["Yahoo GC=F"] = p_yf
-        if df_m15 is None: df_m15 = df_yf
-        
-    if not prices:
-        raise RuntimeError("Kritis: Seluruh sumber harga gagal diakses!")
-        
-    vals = list(prices.values())
-    median_price = float(sorted(vals)[len(vals)//2])
-    valid_prices = {k: v for k, v in prices.items() if abs(v - median_price) <= 35.0}
-    if not valid_prices: valid_prices = prices
-    
-    raw_price = float(sorted(valid_prices.values())[len(valid_prices)//2])
-    
+    if p_deriv:
+        raw_price = p_deriv
+        prices_source = "Deriv WebSocket"
+
+    # 2. Cadangan 1: Binance PAXG
+    if raw_price is None:
+        log("Deriv WebSocket gagal, beralih ke Binance PAXG...")
+        p_binance = fetch_binance_paxg()
+        if p_binance:
+            raw_price = p_binance
+            prices_source = "Binance PAXG"
+            df_m15, _ = fetch_yf_gc() # Gunakan struktur YF sebagai fallback dataframe M15
+
+    # 3. Cadangan Terakhir: Yahoo Finance (GC=F)
+    if raw_price is None:
+        log("Binance gagal, beralih ke Yahoo Finance (GC=F)...")
+        df_yf, p_yf = fetch_yf_gc()
+        if p_yf:
+            raw_price = p_yf
+            prices_source = "Yahoo GC=F"
+            df_m15 = df_yf
+
+    if raw_price is None or df_m15 is None:
+        raise RuntimeError("Kritis: Seluruh sumber harga (Deriv, Binance, Yahoo) gagal diakses!")
+
     mt5_offset = 0.0
     try:
         mt5_offset = float(os.getenv("MT5_OFFSET", "0"))
     except: pass
-    
+
     final_price = raw_price + mt5_offset
-    log(f"Raw Median: {raw_price:.2f} | MT5 Offset Applied: {mt5_offset:+.2f} | Final Price: {final_price:.2f}")
-    
+    log(f"Sumber Terpilih: {prices_source} | Raw Price: {raw_price:.2f} | MT5 Offset: {mt5_offset:+.2f} | Final: {final_price:.2f}")
+
+    # Ambil tren H1 dan H4
     df_h1, _ = fetch_deriv(200, 3600)
     if df_h1 is None: df_h1 = df_m15
     df_h4, _ = fetch_deriv(200, 14400)
     if df_h4 is None: df_h4 = df_h1
-    
-    return final_price, df_m15, df_h1, df_h4, valid_prices, mt5_offset
+
+    return final_price, df_m15, df_h1, df_h4, prices_source, mt5_offset
 
 def calc_atr(df, period=14):
     try:
@@ -146,7 +157,7 @@ def rsi(df, p=14):
         return 100 - 100 / (1 + rs)
     except: return pd.Series([50] * len(df))
 
-# 10 CORE ENGINES (Dilengkapi Safe Guard)
+# 10 CORE ENGINES
 def NADI(df):
     try:
         e9 = df["close"].ewm(9).mean().iloc[-1]; e21 = df["close"].ewm(21).mean().iloc[-1]; pr = df["close"].iloc[-1]
@@ -233,21 +244,21 @@ def make_chart(df, entry, sl, t1, t2, t3, t4, signal, conf, atr_m15):
         plt.legend(fontsize=8)
         plt.grid(alpha=0.3)
         plt.tight_layout()
-        path = "/tmp/chart_v242.png"
+        path = "/tmp/chart_v243.png"
         plt.savefig(path, dpi=150)
         plt.close()
         return path
     except: return None
 
 def main():
-    log("V24.2 OFFSET-SYNCHRONIZED START")
+    log("V24.3 FAILOVER-SYNCHRONIZED START")
     dna = load(DNA_FILE, {"engines": {}})
     journal = load(JOURNAL_FILE, [])
 
     try:
-        price, df_m15, df_h1, df_h4, sources, mt5_offset = get_multi_source_price()
+        price, df_m15, df_h1, df_h4, source_name, mt5_offset = get_failover_price()
     except Exception as e:
-        log(f"Gagal mengambil harga multi-source: {e}")
+        log(f"Gagal total mengambil harga: {e}")
         return 1
 
     engine_map = [
@@ -316,15 +327,13 @@ def main():
     if len(journal) > 50: journal = journal[-50:]
     save(JOURNAL_FILE, journal)
 
-    sumber_text = "\n".join([f"• {k}: {v + mt5_offset:.2f}" for k, v in sources.items()])
     chart_path = make_chart(df_m15, entry, sl, t1, t2, t3, t4, signal, consensus, round(atr_m15, 2))
-
     offset_info = f"\n⚙️ <b>MT5 Offset:</b> {mt5_offset:+.2f}$" if mt5_offset != 0 else ""
 
     caption = (
-        f"💎 <b>V24.2 MT5-SYNC - {signal} ({consensus:.0f}%)</b>\n"
+        f"💎 <b>V24.3 FAILOVER - {signal} ({consensus:.0f}%)</b>\n"
         f"━━━━━━━━━━━━\n"
-        f"{sumber_text}\n"
+        f"📡 <b>Sumber:</b> {source_name}\n"
         f"<b>Adjusted Price:</b> {price:.2f} {offset_info}\n"
         f"━━━━━━━━━━━━\n"
         f"<b>Entry:</b> {entry:.2f}\n"
@@ -332,7 +341,7 @@ def main():
         f"<b>TP1:</b> {round(t1,2)} | <b>TP2:</b> {round(t2,2)}\n"
         f"<b>TP3:</b> {round(t3,2)} | <b>TP4:</b> {round(t4,2)}\n"
         f"━━━━━━━━━━━━\n"
-        f"🎯 Perfectly Synced to MT5 | {datetime.now(WIB).strftime('%H:%M WIB')}"
+        f"🎯 Failover Active & Synced | {datetime.now(WIB).strftime('%H:%M WIB')}"
     )
 
     if chart_path and os.path.exists(chart_path):
@@ -340,7 +349,7 @@ def main():
     else:
         send_text(caption)
     
-    log(f"SINYAL SYNCED BERHASIL DIKIRIM: {signal} di {entry:.2f} ({consensus:.0f}%)")
+    log(f"SINYAL FAILOVER BERHASIL DIKIRIM: {signal} di {entry:.2f} ({consensus:.0f}%) dari {source_name}")
     return 0
 
 if __name__ == "__main__":
