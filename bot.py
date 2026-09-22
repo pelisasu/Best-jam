@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# V24.6 MULTI-TF ANALYSIS (M15+H1) + DYNAMIC FAILOVER + 10 CORE ENGINES [FIXED KEYERROR]
+# V24.6.1 MULTI-TF ANALYSIS (M15+H1) + DYNAMIC FAILOVER + 10 CORE ENGINES [PERFECTED EVALUATION]
 import os, json, time, sys
 from datetime import datetime, timedelta
 import pytz, requests, pandas as pd, yfinance as yf
@@ -42,7 +42,7 @@ def send_photo(cap, p):
         send_text(cap)
 
 def send_emergency_alert(msg):
-    alert_msg = f"🚨 <b>EMERGENCY ALERT</b>\nBot V24.6 mengalami kegagalan kritis:\n\n<code>{msg}</code>\n\nSegera periksa log GitHub Actions atau server Anda."
+    alert_msg = f"🚨 <b>EMERGENCY ALERT</b>\nBot V24.6.1 mengalami kegagalan kritis:\n\n<code>{msg}</code>\n\nSegera periksa log GitHub Actions atau server Anda."
     send_text(alert_msg)
 
 def load(p, d):
@@ -282,62 +282,72 @@ def EMBER(df):
         return (1, 1.0) if pr > ma10 else (-1, 1.0)
     except: return (0, 1.0)
 
-# [FIX] Fungsi evaluasi yang tahan banting terhadap data jurnal lama/tidak lengkap
+# [PERFECTED] Fungsi evaluasi yang tahan banting, aman, dan memiliki mekanisme timeout (DRAW)
 def evaluate_and_evolve_dna_from_journal(dna, journal, current_price):
-    if "engines" not in dna: dna["engines"] = {name: {"weight": 1.0} for name, _ in engine_map}
+    if "engines" not in dna: 
+        dna["engines"] = {name: {"weight": 1.0} for name, _ in engine_map}
     
     updated = False
+    now_wib = datetime.now(WIB)
+    
     for trade in journal:
         if trade.get("evaluated"): 
             continue
             
-        # [FIX] Validasi kelengkapan data trade lama
         required_keys = ["time", "signal", "price", "sl", "tp1"]
         if not all(k in trade for k in required_keys):
-            log(f"⚠️ Melewati trade lama dengan data tidak lengkap (format versi sebelumnya).")
+            log(f"⚠️ Melewati trade lama dengan data tidak lengkap.")
             trade["evaluated"] = True
             updated = True
             continue
             
         try:
             trade_time = datetime.fromisoformat(trade["time"])
-        except:
+            # Pastikan timezone-aware untuk perbandingan yang aman
+            if trade_time.tzinfo is None:
+                trade_time = WIB.localize(trade_time)
+        except Exception:
             trade["evaluated"] = True
             updated = True
             continue
             
-        if (datetime.now(WIB) - trade_time).total_seconds() < 7200:
-            continue
-
-        signal = trade["signal"]
-        sl = trade["sl"]
-        tp1 = trade["tp1"]
-        price = trade["price"]
-        engine_states = trade.get("engine_states", {})
-        
+        trade_age_hours = (now_wib - trade_time).total_seconds() / 3600
         result = None
-        if signal == "BUY":
-            if current_price >= tp1: result = "WIN"
-            elif current_price <= sl: result = "LOSS"
-        else:
-            if current_price <= tp1: result = "WIN"
-            elif current_price >= sl: result = "LOSS"
+        
+        # 1. Cek apakah sudah kena TP atau SL berdasarkan harga saat ini
+        if trade["signal"] == "BUY":
+            if current_price >= trade["tp1"]: result = "WIN"
+            elif current_price <= trade["sl"]: result = "LOSS"
+        else: # SELL
+            if current_price <= trade["tp1"]: result = "WIN"
+            elif current_price >= trade["sl"]: result = "LOSS"
+            
+        # 2. [FITUR BARU] Timeout / Expiration untuk trade yang sideways terlalu lama
+        # Strategi M15+H1 idealnya max hold 6 jam. Jika belum hit, anggap DRAW (Expired).
+        if result is None and trade_age_hours > 6.0:
+            result = "DRAW"
+            log(f"⏰ Trade {trade['signal']} @ {trade['price']} kedaluwarsa (>{trade_age_hours:.1f} jam). Hasil: DRAW.")
 
         if result:
-            log(f"📊 Evaluasi Trade Masa Lalu: {signal} @ {price} -> {result}")
-            for name, state in engine_states.items():
-                if name in dna["engines"]:
-                    curr_w = dna["engines"][name]["weight"]
-                    was_bullish = state.get("sc", 0) > 0
-                    should_have_been_bullish = (signal == "BUY" and result == "WIN") or (signal == "SELL" and result == "LOSS")
-                    
-                    if was_bullish == should_have_been_bullish:
-                        new_w = min(2.0, curr_w + 0.05)
-                    else:
-                        new_w = max(0.5, curr_w - 0.05)
-                    
-                    new_w = new_w * 0.99 + 1.0 * 0.01
-                    dna["engines"][name]["weight"] = round(new_w, 4)
+            log(f"📊 Evaluasi Trade: {trade['signal']} @ {trade['price']} -> {result}")
+            
+            # Hanya update weight jika hasil adalah WIN atau LOSS (DRAW tidak menghukum/menghadiahi engine)
+            if result in ["WIN", "LOSS"]:
+                engine_states = trade.get("engine_states", {})
+                for name, state in engine_states.items():
+                    if name in dna["engines"]:
+                        curr_w = dna["engines"][name]["weight"]
+                        was_bullish = state.get("sc", 0) > 0
+                        should_have_been_bullish = (trade["signal"] == "BUY" and result == "WIN") or (trade["signal"] == "SELL" and result == "LOSS")
+                        
+                        if was_bullish == should_have_been_bullish:
+                            new_w = min(2.0, curr_w + 0.05)
+                        else:
+                            new_w = max(0.5, curr_w - 0.05)
+                        
+                        # Mean reversion kecil agar weight stabil di sekitar 1.0
+                        new_w = new_w * 0.99 + 1.0 * 0.01
+                        dna["engines"][name]["weight"] = round(new_w, 4)
             
             trade["evaluated"] = True
             trade["result"] = result
@@ -369,7 +379,7 @@ def make_chart(df, entry, sl, t1, t2, t3, t4, signal, conf, atr_m15):
         plt.grid(alpha=0.3)
         plt.tight_layout()
         
-        path = "/tmp/chart_v246.png"
+        path = "/tmp/chart_v2461.png"
         plt.savefig(path, dpi=150)
         plt.close('all')
         return path
@@ -383,7 +393,7 @@ engine_map = [
 ]
 
 def main():
-    log("V24.6 MULTI-TF ANALYSIS (M15+H1) START")
+    log("V24.6.1 MULTI-TF ANALYSIS (M15+H1) START")
     dna = load(DNA_FILE, {"engines": {}})
     journal = load(JOURNAL_FILE, [])
 
@@ -406,6 +416,7 @@ def main():
             send_emergency_alert(f"{err_msg}\n(Gagal {fail_count['count']}x berturut-turut)")
         return 1
 
+    # [PERFECTED] Evaluasi jurnal dengan mekanisme timeout yang aman
     dna = evaluate_and_evolve_dna_from_journal(dna, journal, price)
     save(DNA_FILE, dna)
     
@@ -484,7 +495,7 @@ def main():
     offset_info = f"\n⚙️ <b>Offset:</b> {total_offset:+.2f}$" if total_offset != 0 else ""
 
     caption = (
-        f"💎 <b>V24.6 MULTI-TF (M15 + H1) - {signal} ({consensus:.0f}%)</b>\n"
+        f"💎 <b>V24.6.1 MULTI-TF (M15 + H1) - {signal} ({consensus:.0f}%)</b>\n"
         f"━━━━━━━━━━━━\n"
         f"📡 <b>Sumber:</b> {source_name} {offset_info}\n"
         f"📊 <b>Analisis TF H1:</b> {h1_trend_text} (RSI: {h1_rsi_val:.1f})\n"
