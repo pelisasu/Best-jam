@@ -1,10 +1,9 @@
-name: V24.5 ULTIMATE OMNI-BOT
+name: V24.6.1 ULTIMATE OMNI-BOT
 
 on:
   schedule:
-    # Berjalan setiap 15 menit (menit ke-7, 22, 37, 52) UTC = 07:07, 07:22, 07:37, 07:52 WIB
     - cron: '7,22,37,52 * * * 1-5'
-  workflow_dispatch: # Untuk eksekusi manual jika diperlukan
+  workflow_dispatch:
 
 jobs:
   run-bot:
@@ -16,20 +15,18 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Penting agar git-auto-commit bisa membaca history
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          # [FIX] Baris 'cache: pip' dihapus untuk mencegah error "Cache folder path doesn't exist"
 
       - name: Install Dependencies
         run: |
-          # Instalasi langsung tanpa cache. Cepat dan stabil.
           pip install --no-cache-dir pytz requests pandas matplotlib websocket-client yfinance lxml beautifulsoup4
 
-      - name: Jalankan Bot V24.5 (Multi-Source & MT5 Sync)
+      - name: Run Bot V24.6.1
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -42,9 +39,9 @@ jobs:
           echo "Memulai eksekusi bot pada waktu UTC: $(date -u)"
           python3 bot.py
 
-      - name: Commit DNA Evolving & Journal State
+      - name: Commit DNA & Journal State
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "chore: auto-update V24.5 DNA & trade history [skip ci]"
+          commit_message: "chore: auto-update V24.6.1 DNA & trade history [skip ci]"
           file_pattern: "**/*.json"
           commit_options: "--no-verify"
