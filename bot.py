@@ -170,7 +170,7 @@ def get_failover_price_with_dynamic_offset():
             try:
                 source_specific_offset = float(os.getenv("YAHOO_OFFSET", "-46.50"))
             except Exception:
-                source_specific_offset = -36.50
+                source_specific_offset = -41.50
 
     if raw_price is None or df_m15 is None:
         raise RuntimeError("Kritis: Seluruh sumber harga gagal diakses!")
