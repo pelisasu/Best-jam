@@ -34,7 +34,7 @@ jobs:
           MT5_OFFSET: ${{ secrets.MT5_OFFSET || '0' }}
           DERIV_OFFSET: ${{ secrets.DERIV_OFFSET || '0' }}
           BINANCE_OFFSET: ${{ secrets.BINANCE_OFFSET || '0' }}
-          YAHOO_OFFSET: ${{ secrets.YAHOO_OFFSET || '-46.50' }}
+          YAHOO_OFFSET: ${{ secrets.YAHOO_OFFSET || '-36.50' }}
         run: |
           echo "Memulai eksekusi bot pada waktu UTC: $(date -u)"
           python3 bot.py
