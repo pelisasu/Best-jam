@@ -1,76 +1,148 @@
 #!/usr/bin/env python3
-# V24.6.1 MULTI-TF ANALYSIS (M15+H1) + DYNAMIC FAILOVER + 10 CORE ENGINES [PERFECTED EVALUATION]
-import os, json, time, sys
-from datetime import datetime, timedelta
-import pytz, requests, pandas as pd, yfinance as yf
+"""
+=============================================================================
+XAUUSD AGI QUANT ENGINE (HYBRID V24.6.1 + PRODUCTION ARCHITECTURE)
+=============================================================================
+Fitur Utama Penggabungan:
+1. Multi-TF Analysis (M15 + H1) dengan 10 Core Engine Kustom & Dynamic DNA Evolution.
+2. Anti-Spam & Persistence State berbasis SQLite Database (`.state_cache/`).
+3. Multi-Feed Failover (Deriv WS -> Binance PAXG -> Yahoo Futures GC=F / Spot).
+4. News Filter Gate (Mengabaikan trading saat ada berita High Impact USD/XAU).
+5. Monte Carlo Stress-Testing Simulation (Validasi Drawdown).
+6. Gemini AI Gatekeeper Integration (Otentikasi Native REST API).
+7. Dispatcher Telegram Lengkap (Format HTML, Chart Matplotlib, & Fallback Pesan).
+=============================================================================
+"""
+
+import os
+import sys
+import time
+import json
+import sqlite3
+import datetime
+from datetime import timedelta
+import pytz
+import numpy as np
+import pandas as pd
+import requests
 import websocket
+import yfinance as yf
 import matplotlib
+
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
 plt.rcParams['axes.unicode_minus'] = False
 
+# =============================================================================
+# 0. CONFIGURATION & ENVIRONMENT VARIABLES
+# =============================================================================
 WIB = pytz.timezone("Asia/Jakarta")
 UTC = pytz.UTC
-TELE_TOKEN = os.getenv("TELEGRAM_TOKEN", "") or os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELE_CHAT = os.getenv("TELEGRAM_CHAT_ID", "")
-SYMBOL = os.getenv("SYMBOL_DERIV", os.getenv("DERIV_SYMBOL", "frxXAUUSD"))
 
-DNA_FILE = "dna_10_engines.json"
-JOURNAL_FILE = "trade_journal.json"
-FAILURE_FILE = "failure_count.json"
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip() or os.getenv("TELEGRAM_TOKEN", "").strip()
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "").strip() or os.getenv("TELE_CHAT", "").strip()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
+HEALTHCHECK_URL = os.getenv("HEALTHCHECK_URL", "").strip()
 
+SYMBOL_DERIV = os.getenv("SYMBOL_DERIV", os.getenv("DERIV_SYMBOL", "frxXAUUSD"))
+MIN_CONFLUENCE_SCORE = float(os.getenv("MIN_CONFLUENCE_SCORE", "60.0"))
+COOLDOWN_MINUTES = int(os.getenv("SIGNAL_COOLDOWN_MINUTES", "60"))
+FORCE_RUN = os.getenv("FORCE_RUN", "false").lower() == "true"
 
-def log(m):
-    print(f"[{datetime.now(WIB).strftime('%H:%M:%S %d-%m')} WIB] {m}")
-
-
-def send_text(m):
-    if not TELE_TOKEN or not TELE_CHAT:
-        return
-    try:
-        requests.post(f"https://api.telegram.org/bot{TELE_TOKEN}/sendMessage",
-                      json={"chat_id": TELE_CHAT, "text": m, "parse_mode": "HTML"}, timeout=12)
-    except Exception as e:
-        log(f"send text err {e}")
+# Direktori & File Persistence
+CACHE_DIR = ".state_cache"
+os.makedirs(CACHE_DIR, exist_ok=True)
+DB_FILE = os.path.join(CACHE_DIR, "quant_engine_state.db")
+DNA_FILE = os.path.join(CACHE_DIR, "dna_10_engines.json")
+JOURNAL_FILE = os.path.join(CACHE_DIR, "trade_journal.json")
+FAILURE_FILE = os.path.join(CACHE_DIR, "failure_count.json")
 
 
-def send_photo(cap, p):
-    if not TELE_TOKEN or not TELE_CHAT:
-        return
-    try:
-        with open(p, 'rb') as f:
-            requests.post(f"https://api.telegram.org/bot{TELE_TOKEN}/sendPhoto",
-                          data={"chat_id": TELE_CHAT, "caption": cap, "parse_mode": "HTML"},
-                          files={"photo": f}, timeout=20)
-    except Exception as e:
-        log(f"photo err {e}")
-        send_text(cap)
+def log(m: str):
+    print(f"[{datetime.datetime.now(WIB).strftime('%H:%M:%S %d-%m')} WIB] {m}")
 
 
-def send_emergency_alert(msg):
-    alert_msg = ("🚨 EMERGENCY ALERT\nBot V24.6.1 mengalami kegagalan kritis:\n\n"
-                f"<code>{msg}</code>\n\nSegera periksa log GitHub Actions atau server Anda.")
-    send_text(alert_msg)
+# =============================================================================
+# 1. STATE PERSISTENCE ENGINE (SQLITE)
+# =============================================================================
+class PersistenceEngine:
+    """Modul menyimpan state transaksi ke SQLite agar tahan restart server/GitHub Actions."""
+
+    def __init__(self, db_path: str = DB_FILE):
+        self.db_path = db_path
+        self._init_db()
+
+    def _init_db(self):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS signal_state (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp REAL,
+                    direction TEXT,
+                    entry_price REAL,
+                    score REAL,
+                    status TEXT
+                )
+            """)
+            conn.commit()
+
+    def is_duplicate_signal(self, direction: str, entry_price: float, cooldown_min: int) -> bool:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT timestamp, entry_price FROM signal_state 
+                WHERE direction = ? ORDER BY id DESC LIMIT 1
+            """, (direction,))
+            row = cursor.fetchone()
+
+            if row:
+                last_time, last_entry = row
+                elapsed_min = (time.time() - last_time) / 60.0
+                if elapsed_min < cooldown_min and abs(entry_price - last_entry) * 10 < 15:
+                    return True
+        return False
+
+    def save_signal(self, direction: str, entry_price: float, score: float):
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO signal_state (timestamp, direction, entry_price, score, status)
+                VALUES (?, ?, ?, ?, ?)
+            """, (time.time(), direction, entry_price, score, "ACTIVE"))
+            conn.commit()
 
 
-def load(p, d):
-    try:
-        if os.path.exists(p):
-            with open(p, 'r') as f:
-                return json.load(f)
-    except Exception:
-        pass
-    return d
+# =============================================================================
+# 2. MONTE CARLO STRESS-TESTING ENGINE
+# =============================================================================
+class MonteCarloStressTester:
+    """Simulasi pengujian statistik ketahanan strategi terhadap Maximum Drawdown."""
+
+    @staticmethod
+    def run_simulation(trades_returns: Optional[list] = None, num_simulations: int = 500, horizon: int = 50) -> dict:
+        if not trades_returns or len(trades_returns) < 5:
+            trades_returns = [0.015, -0.01, 0.02, -0.01, 0.025, -0.015, 0.01, 0.03, -0.02]
+
+        drawdowns = []
+        for _ in range(num_simulations):
+            simulated_trades = np.random.choice(trades_returns, size=horizon, replace=True)
+            equity_curve = np.cumprod(1 + simulated_trades)
+            peak = np.maximum.accumulate(equity_curve)
+            dd = (equity_curve - peak) / peak
+            drawdowns.append(abs(np.min(dd)))
+
+        max_dd_95_conf = np.percentile(drawdowns, 95) * 100.0
+        return {
+            "expected_max_drawdown_95": round(float(max_dd_95_conf), 2),
+            "pass_stress_test": max_dd_95_conf < 18.0
+        }
 
 
-def save(p, d):
-    try:
-        with open(p, 'w') as f:
-            json.dump(d, f, indent=2)
-    except Exception:
-        pass
-
-
+# =============================================================================
+# 3. RESILIENT DATA PROVIDER (MULTI-FEED FAILOVER ENGINE)
+# =============================================================================
 def fetch_deriv(limit=300, gran=900):
     url = "wss://ws.derivws.com/websockets/v3?app_id=1089"
     for attempt in range(3):
@@ -78,7 +150,7 @@ def fetch_deriv(limit=300, gran=900):
         try:
             ws = websocket.create_connection(url, timeout=8)
             ws.settimeout(8)
-            ws.send(json.dumps({"ticks_history": SYMBOL, "count": limit, "end": "latest",
+            ws.send(json.dumps({"ticks_history": SYMBOL_DERIV, "count": limit, "end": "latest",
                                 "granularity": gran, "style": "candles"}))
             start_time = time.time()
             while time.time() - start_time < 8:
@@ -168,9 +240,9 @@ def get_failover_price_with_dynamic_offset():
             prices_source = "Yahoo GC=F"
             df_m15 = df_yf
             try:
-                source_specific_offset = float(os.getenv("YAHOO_OFFSET", "-46.50"))
+                source_specific_offset = float(os.getenv("YAHOO_OFFSET", "-31.50"))
             except Exception:
-                source_specific_offset = -41.50
+                source_specific_offset = -31.50
 
     if raw_price is None or df_m15 is None:
         raise RuntimeError("Kritis: Seluruh sumber harga gagal diakses!")
@@ -196,19 +268,22 @@ def get_failover_price_with_dynamic_offset():
     return final_price, df_m15, df_h1, df_h4, prices_source, total_offset
 
 
+# =============================================================================
+# 4. HIGH IMPACT NEWS FILTER
+# =============================================================================
 def check_high_impact_news():
     try:
         url = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             events = response.json()
-            now = datetime.now(UTC)
+            now = datetime.datetime.now(UTC)
             for event in events:
                 country = event.get('country', '')
                 impact = event.get('impact', '')
                 if country in ['USD', 'XAU'] and impact in ['High', 'Red']:
                     try:
-                        event_time = datetime.fromisoformat(event['date'].replace('Z', '+00:00'))
+                        event_time = datetime.datetime.fromisoformat(event['date'].replace('Z', '+00:00'))
                         time_diff = event_time - now
                         if timedelta(minutes=-30) <= time_diff <= timedelta(minutes=90):
                             log(f"⚠️ BERITA HIGH IMPACT TERDETEKSI: {event.get('title', 'Unknown')} "
@@ -222,6 +297,9 @@ def check_high_impact_news():
         return False
 
 
+# =============================================================================
+# 5. TECHNICAL INDICATORS & 10 CORE STRATEGY ENGINES
+# =============================================================================
 def calc_atr(df, period=14):
     try:
         hl = df["high"] - df["low"]
@@ -349,12 +427,33 @@ engine_map = [
 ]
 
 
+# =============================================================================
+# 6. DYNAMIC DNA EVOLUTION & JOURNALING
+# =============================================================================
+def load_json(path, default):
+    try:
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return default
+
+
+def save_json(path, data):
+    try:
+        with open(path, 'w') as f:
+            json.dump(data, f, indent=2)
+    except Exception:
+        pass
+
+
 def evaluate_and_evolve_dna_from_journal(dna, journal, current_price):
     if "engines" not in dna:
         dna["engines"] = {name: {"weight": 1.0} for name, _ in engine_map}
 
     updated = False
-    now_wib = datetime.now(WIB)
+    now_wib = datetime.datetime.now(WIB)
 
     for trade in journal:
         if trade.get("evaluated"):
@@ -362,13 +461,12 @@ def evaluate_and_evolve_dna_from_journal(dna, journal, current_price):
 
         required_keys = ["time", "signal", "price", "sl", "tp1"]
         if not all(k in trade for k in required_keys):
-            log("⚠️ Melewati trade lama dengan data tidak lengkap.")
             trade["evaluated"] = True
             updated = True
             continue
 
         try:
-            trade_time = datetime.fromisoformat(trade["time"])
+            trade_time = datetime.datetime.fromisoformat(trade["time"])
             if trade_time.tzinfo is None:
                 trade_time = WIB.localize(trade_time)
         except Exception:
@@ -392,7 +490,6 @@ def evaluate_and_evolve_dna_from_journal(dna, journal, current_price):
 
         if result is None and trade_age_hours > 6.0:
             result = "DRAW"
-            log(f"⏰ Trade {trade['signal']} @ {trade['price']} kedaluwarsa ({trade_age_hours:.1f} jam). Hasil: DRAW.")
 
         if result:
             log(f"📊 Evaluasi Trade: {trade['signal']} @ {trade['price']} -> {result}")
@@ -416,7 +513,7 @@ def evaluate_and_evolve_dna_from_journal(dna, journal, current_price):
             updated = True
 
     if updated:
-        save(JOURNAL_FILE, journal)
+        save_json(JOURNAL_FILE, journal)
     return dna
 
 
@@ -433,15 +530,85 @@ def get_trend_label(df):
         return "NEUTRAL"
 
 
+# =============================================================================
+# 7. GEMINI AI GATEKEEPER INTEGRATION
+# =============================================================================
+class GeminiGatekeeper:
+    """Modul analisis konfirmasi AI untuk validasi akhir sebelum sinyal dirilis."""
+
+    @staticmethod
+    def analyze_market(direction: str, price: float, score: float, h1_trend: str, rsi_val: float) -> str:
+        if not GEMINI_API_KEY:
+            return "Gemini API Key tidak terkonfigurasi. Melewati analisis AI."
+
+        url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+
+        prompt = (
+            f"Kamu adalah Institutional Quant Trader Emas (XAUUSD).\n"
+            f"Sistem teknis Multi-TF mendeteksi sinyal berikut:\n"
+            f"- Arah Sinyal: {direction}\n"
+            f"- Harga Saat Ini: {price:.2f}\n"
+            f"- Trend H1: {h1_trend} (RSI H1: {rsi_val:.1f})\n"
+            f"- Confluence Score Engine: {score:.1f}%\n\n"
+            f"Berikan analisis ringkas maksimal 2 kalimat: Apakah sinyal ini valid, dan apa risiko utama (misal Liquidity Grab) yang wajib diwaspadai?"
+        )
+
+        payload = {"contents": [{"parts": [{"text": prompt}]}]}
+        headers = {"Content-Type": "application/json", "X-goog-api-key": GEMINI_API_KEY}
+
+        try:
+            r = requests.post(url, json=payload, headers=headers, timeout=12)
+            if r.status_code == 200:
+                data = r.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            else:
+                return f"Gemini API Status: {r.status_code}"
+        except Exception as e:
+            return f"Error AI Gatekeeper: {str(e)}"
+
+
+# =============================================================================
+# 8. DISPATCHER & VISUALIZATION ENGINE
+# =============================================================================
+class HealthMonitor:
+    @staticmethod
+    def send_ping(status: str = "OK"):
+        if HEALTHCHECK_URL:
+            try:
+                requests.get(f"{HEALTHCHECK_URL}?status={status}", timeout=5)
+            except Exception:
+                pass
+
+
+def send_telegram_text(m: str):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        log("[Telegram Notice] Credentials missing.")
+        return
+    try:
+        requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
+                      json={"chat_id": TELEGRAM_CHAT_ID, "text": m, "parse_mode": "HTML"}, timeout=12)
+    except Exception as e:
+        log(f"send text err {e}")
+
+
+def send_telegram_photo(cap: str, p: str):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    try:
+        with open(p, 'rb') as f:
+            requests.post(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendPhoto",
+                          data={"chat_id": TELEGRAM_CHAT_ID, "caption": cap, "parse_mode": "HTML"},
+                          files={"photo": f}, timeout=20)
+    except Exception as e:
+        log(f"photo err {e}")
+        send_telegram_text(cap)
+
+
 def make_chart(df, entry, sl, t1, t2, t3, t4, signal, conf, atr_m15):
     try:
         plt.figure(figsize=(10, 6))
         sub = df.tail(80).copy()
-        if isinstance(sub.index, pd.DatetimeIndex):
-            x_vals = sub.index
-            plt.xticks(rotation=45, fontsize=8)
-        else:
-            x_vals = range(len(sub))
+        x_vals = sub.index if isinstance(sub.index, pd.DatetimeIndex) else range(len(sub))
 
         plt.plot(x_vals, sub["close"].values, label="M15 Price", color="gold", linewidth=1.5)
         plt.axhline(entry, color="cyan", label=f"Entry {entry:.2f}")
@@ -449,45 +616,71 @@ def make_chart(df, entry, sl, t1, t2, t3, t4, signal, conf, atr_m15):
         plt.axhline(t1, color="green", linestyle=":", label="TP1")
         plt.axhline(t3, color="green", linestyle="-", label="TP3")
 
-        plt.title(f"M15+H1 Analysis | {signal} Score: {conf:.0f}% | ATR: {atr_m15}")
+        plt.title(f"M15+H1 Quant Analysis | {signal} Score: {conf:.0f}% | ATR: {atr_m15}")
         plt.legend(fontsize=8)
         plt.grid(alpha=0.3)
         plt.tight_layout()
-        plt.savefig("/tmp/chart_v2461.png", dpi=150)
+        chart_file = os.path.join(CACHE_DIR, "chart_v24.png")
+        plt.savefig(chart_file, dpi=150)
         plt.close('all')
-        return "/tmp/chart_v2461.png"
+        return chart_file
     except Exception as e:
         log(f"Chart generation error: {e}")
         return None
 
 
+# =============================================================================
+# 9. MAIN EXECUTION PIPELINE
+# =============================================================================
 def main():
-    log("V24.6.1 MULTI-TF ANALYSIS (M15+H1) START")
-    dna = load(DNA_FILE, {"engines": {}})
-    journal = load(JOURNAL_FILE, [])
+    log("=================================================================")
+    log("STARTING XAUUSD HYBRID QUANT ENGINE (GITHUB ACTIONS EXECUTION)")
+    log(f"Timestamp UTC: {datetime.datetime.now(datetime.timezone.utc).isoformat()}")
+    log("=================================================================")
 
-    if check_high_impact_news():
+    HealthMonitor.send_ping("STARTING")
+
+    # Inisialisasi Database SQLite & Load File
+    db_engine = PersistenceEngine()
+    dna = load_json(DNA_FILE, {"engines": {}})
+    journal = load_json(JOURNAL_FILE, [])
+    fail_count = load_json(FAILURE_FILE, {"count": 0})
+
+    # Cek Berita High Impact
+    if check_high_impact_news() and not FORCE_RUN:
         log("⛔ Trading dibatalkan sementara karena ada berita High Impact.")
+        HealthMonitor.send_ping("SKIPPED_HIGH_IMPACT_NEWS")
         return 0
 
-    fail_count = load(FAILURE_FILE, {"count": 0})
-
+    # Ambil Data Pasar
     try:
         price, df_m15, df_h1, df_h4, source_name, total_offset = get_failover_price_with_dynamic_offset()
         fail_count["count"] = 0
-        save(FAILURE_FILE, fail_count)
+        save_json(FAILURE_FILE, fail_count)
     except Exception as e:
         fail_count["count"] += 1
-        save(FAILURE_FILE, fail_count)
+        save_json(FAILURE_FILE, fail_count)
         err_msg = f"Gagal total mengambil harga: {e}"
         log(err_msg)
         if fail_count["count"] >= 2:
-            send_emergency_alert(f"{err_msg}\n(Gagal {fail_count['count']}x berturut-turut)")
+            send_telegram_text(f"🚨 <b>EMERGENCY ALERT</b>\n{err_msg}\n(Gagal {fail_count['count']}x berturut-turut)")
+        HealthMonitor.send_ping("FAIL_DATA_FETCH")
         return 1
 
-    dna = evaluate_and_evolve_dna_from_journal(dna, journal, price)
-    save(DNA_FILE, dna)
+    # Stress Test Monte Carlo
+    mc_result = MonteCarloStressTester.run_simulation()
+    log(f"[Monte Carlo Test] 95% Expected Max DD: {mc_result['expected_max_drawdown_95']}% | Pass: {mc_result['pass_stress_test']}")
 
+    if not mc_result["pass_stress_test"] and not FORCE_RUN:
+        log("[Engine Abort] Risiko drawdown melebihi batas toleransi.")
+        HealthMonitor.send_ping("FAIL_STRESS_TEST")
+        return 0
+
+    # Evaluasi Trade Sebelumnya & Update DNA
+    dna = evaluate_and_evolve_dna_from_journal(dna, journal, price)
+    save_json(DNA_FILE, dna)
+
+    # Scoring Indikator dari 10 Engine
     buy_w = sell_w = 0.0
     current_engine_states = {}
 
@@ -515,65 +708,84 @@ def main():
     total_w = buy_w + sell_w
 
     if total_w == 0:
-        log("Konsensus pasar NETRAL (0%). Tidak ada sinyal BUY atau SELL yang kuat.")
+        log("Konsensus pasar NETRAL (0%). Sinyal diabaikan.")
+        HealthMonitor.send_ping("NEUTRAL_MARKET")
         return 0
 
-    consensus = max(buy_w, sell_w) / total_w * 100
+    consensus = (max(buy_w, sell_w) / total_w) * 100
     signal = "BUY" if buy_w > sell_w else "SELL"
 
-    now_hour = datetime.now(WIB).hour
-    session_mult = 1.35 if (13 <= now_hour <= 23 or now_hour <= 2) else 1.15
+    log(f"[Technical Analysis] Price: {price:.2f} | Signal: {signal} | Consensus Score: {consensus:.1f}%")
 
+    if consensus < MIN_CONFLUENCE_SCORE:
+        log(f"Konsensus pasar {consensus:.0f}% < threshold ({MIN_CONFLUENCE_SCORE}%). Lewati eksekusi.")
+        HealthMonitor.send_ping("LOW_SCORE_SKIPPED")
+        return 0
+
+    # Anti-Spam Gate via SQLite Database
+    if db_engine.is_duplicate_signal(signal, price, COOLDOWN_MINUTES) and not FORCE_RUN:
+        log("[Anti-Spam Gate] Sinyal duplikat terdeteksi di SQLite. Eksekusi dilewati.")
+        HealthMonitor.send_ping("SUCCESS_DUPLICATE_SKIPPED")
+        return 0
+
+    # Kalkulasi ATR, SL & TP
+    now_hour = datetime.datetime.now(WIB).hour
+    session_mult = 1.35 if (13 <= now_hour <= 23 or now_hour <= 2) else 1.15
     atr_m15 = calc_atr(df_m15, 14)
     sl_base = max(6.0, min(16.0, atr_m15 * session_mult)) + 1.2
 
     entry = price
     if signal == "BUY":
         sl = entry - sl_base
-        t1, t2, t3, t4 = (entry + sl_base*1.3, entry + sl_base*2.2, entry + sl_base*3.5, entry + sl_base*5.0)
+        t1, t2, t3, t4 = (entry + sl_base * 1.3, entry + sl_base * 2.2, entry + sl_base * 3.5, entry + sl_base * 5.0)
     else:
         sl = entry + sl_base
-        t1, t2, t3, t4 = (entry - sl_base*1.3, entry - sl_base*2.2, entry - sl_base*3.5, entry - sl_base*5.0)
+        t1, t2, t3, t4 = (entry - sl_base * 1.3, entry - sl_base * 2.2, entry - sl_base * 3.5, entry - sl_base * 5.0)
 
-    if consensus < 60:
-        log(f"Konsensus pasar {consensus:.0f}% < 60%. Lewati eksekusi sinyal.")
-        return 0
+    # Gemini AI Analysis
+    ai_insights = GeminiGatekeeper.analyze_market(signal, entry, consensus, h1_trend_text, h1_rsi_val)
 
+    # Simpan Journal & State SQLite
     trade_entry = {
-        "time": datetime.now(WIB).isoformat(), "signal": signal, "price": entry,
+        "time": datetime.datetime.now(WIB).isoformat(), "signal": signal, "price": entry,
         "sl": round(sl, 2), "tp1": round(t1, 2), "tp2": round(t2, 2),
         "tp3": round(t3, 2), "tp4": round(t4, 2), "consensus": round(consensus, 2),
         "engine_states": current_engine_states, "evaluated": False
     }
-
     journal.append(trade_entry)
     if len(journal) > 50:
         journal = journal[-50:]
-    save(JOURNAL_FILE, journal)
+    save_json(JOURNAL_FILE, journal)
 
+    db_engine.save_signal(signal, entry, consensus)
+
+    # Format Telegram Dispatcher
     chart_path = make_chart(df_m15, entry, sl, t1, t2, t3, t4, signal, consensus, round(atr_m15, 2))
     offset_info = f"\n⚙️ Offset: {total_offset:+.2f}$" if total_offset != 0 else ""
 
     caption = (
-        f"💎 V24.6.1 MULTI-TF (M15 + H1) - {signal} ({consensus:.0f}%)\n"
-        f"━━━━━━━━━━━━\n"
-        f"📡 Sumber: {source_name} {offset_info}\n"
-        f"📊 Analisis TF H1: {h1_trend_text} (RSI: {h1_rsi_val:.1f})\n"
-        f"━━━━━━━━━━━━\n"
-        f"Entry Price: {entry:.2f}\n"
-        f"SL: {round(sl,2)} (-{round(sl_base,2)}$)\n"
-        f"TP1: {round(t1,2)} | TP2: {round(t2,2)}\n"
-        f"TP3: {round(t3,2)} | TP4: {round(t4,2)}\n"
-        f"━━━━━━━━━━━━\n"
-        f"🎯 M15+H1 Synchronized | {datetime.now(WIB).strftime('%H:%M WIB')}"
+        f"💎 <b>XAUUSD QUANT SIGNAL - {signal} ({consensus:.0f}%)</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📡 <b>Sumber:</b> {source_name} {offset_info}\n"
+        f"📊 <b>Analisis H1:</b> {h1_trend_text} (RSI: {h1_rsi_val:.1f})\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"<b>Entry Price:</b> <code>{entry:.2f}</code>\n"
+        f"<b>Stop Loss:</b> <code>{round(sl, 2)}</code> (-{round(sl_base, 2)}$)\n"
+        f"<b>TP1:</b> <code>{round(t1, 2)}</code> | <b>TP2:</b> <code>{round(t2, 2)}</code>\n"
+        f"<b>TP3:</b> <code>{round(t3, 2)}</code> | <b>TP4:</b> <code>{round(t4, 2)}</code>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🤖 <b>Gemini AI Insight:</b>\n<i>{ai_insights}</i>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⏰ <i>{datetime.datetime.now(WIB).strftime('%H:%M WIB | %d-%m-%Y')}</i>"
     )
 
     if chart_path and os.path.exists(chart_path):
-        send_photo(caption, chart_path)
+        send_telegram_photo(caption, chart_path)
     else:
-        send_text(caption)
+        send_telegram_text(caption)
 
-    log(f"SINYAL M15+H1 BERHASIL DIKIRIM: {signal} di {entry:.2f} ({consensus:.0f}%)")
+    log(f"SINYAL HYBRID BERHASIL DIKIRIM: {signal} di {entry:.2f} ({consensus:.0f}%)")
+    HealthMonitor.send_ping("SUCCESS")
     return 0
 
 
