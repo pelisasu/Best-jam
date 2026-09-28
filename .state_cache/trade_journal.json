@@ -51,7 +51,8 @@
         "weight_used": 1.0
       }
     },
-    "evaluated": false
+    "evaluated": true,
+    "result": "WIN"
   },
   {
     "time": "2026-09-28T15:42:46.333270+07:00",
@@ -102,6 +103,61 @@
       },
       "EMBER": {
         "sc": -1,
+        "weight_used": 1.0
+      }
+    },
+    "evaluated": true,
+    "result": "DRAW"
+  },
+  {
+    "time": "2026-09-29T00:01:11.673298+07:00",
+    "signal": "SELL",
+    "price": 4122.0,
+    "sl": 4139.2,
+    "tp1": 4099.64,
+    "tp2": 4084.16,
+    "tp3": 4061.8,
+    "tp4": 4036.0,
+    "consensus": 90.91,
+    "engine_states": {
+      "NADI": {
+        "sc": -1,
+        "weight_used": 1.5
+      },
+      "SAWAH": {
+        "sc": -1,
+        "weight_used": 1.5
+      },
+      "SEMUT": {
+        "sc": -1,
+        "weight_used": 1.2
+      },
+      "PADI": {
+        "sc": 0,
+        "weight_used": 1.3
+      },
+      "AKAR": {
+        "sc": -1,
+        "weight_used": 1.8
+      },
+      "WAYANG": {
+        "sc": -1,
+        "weight_used": 1.0
+      },
+      "LUMPUR": {
+        "sc": 0,
+        "weight_used": 1.1
+      },
+      "API": {
+        "sc": 0,
+        "weight_used": 1.0
+      },
+      "ANGIN": {
+        "sc": -1,
+        "weight_used": 1.0
+      },
+      "EMBER": {
+        "sc": 1,
         "weight_used": 1.0
       }
     },
