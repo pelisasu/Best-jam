@@ -28,6 +28,7 @@ import requests
 import websocket
 import yfinance as yf
 import matplotlib
+from typing import Optional
 
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
