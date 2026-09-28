@@ -1,5 +1,7 @@
-requests
+numpy
 pandas
+requests
+websocket-client
+yfinance
 matplotlib
 pytz
-websocket-client
