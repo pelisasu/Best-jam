@@ -14,9 +14,13 @@ on:
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Mengizinkan bot melakukan push/write commit ke repo
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true # Mempertahankan kredensial token untuk proses git push
 
       - name: Set up Python 3.10
         uses: actions/setup-python@v5
