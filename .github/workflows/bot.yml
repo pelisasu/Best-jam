@@ -2,46 +2,52 @@ name: V24.6.1 ULTIMATE OMNI-BOT
 
 on:
   schedule:
-    - cron: '7,22,37,52 * * * 1-5'
-  workflow_dispatch:
+    # Berjalan otomatis setiap 15 menit (Senin - Jumat)
+    - cron: '*/15 * * * 1-5'
+  workflow_dispatch: # Memungkinkan tombol "Run workflow" manual
+    inputs:
+      force_run:
+        description: 'Paksa jalankan bot (Bypass Anti-Spam & Filters)?'
+        required: false
+        default: 'false'
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up Python
+      - name: Set up Python 3.10
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
+          cache: 'pip'
 
       - name: Install Dependencies
         run: |
-          pip install --no-cache-dir pytz requests pandas matplotlib websocket-client yfinance lxml beautifulsoup4
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Run Bot V24.6.1
+      - name: Run Quant Engine Bot
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          DERIV_SYMBOL: ${{ secrets.DERIV_SYMBOL || 'frxXAUUSD' }}
-          MT5_OFFSET: ${{ secrets.MT5_OFFSET || '0' }}
-          DERIV_OFFSET: ${{ secrets.DERIV_OFFSET || '0' }}
-          BINANCE_OFFSET: ${{ secrets.BINANCE_OFFSET || '0' }}
-          YAHOO_OFFSET: ${{ secrets.YAHOO_OFFSET || '-41.50' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+          DERIV_SYMBOL: ${{ vars.DERIV_SYMBOL || 'frxXAUUSD' }}
+          MT5_OFFSET: ${{ vars.MT5_OFFSET || '0' }}
+          DERIV_OFFSET: ${{ vars.DERIV_OFFSET || '0' }}
+          BINANCE_OFFSET: ${{ vars.BINANCE_OFFSET || '0' }}
+          YAHOO_OFFSET: ${{ vars.YAHOO_OFFSET || '-41.50' }}
+          FORCE_RUN: ${{ github.event.inputs.force_run || 'false' }}
         run: |
           echo "Memulai eksekusi bot pada waktu UTC: $(date -u)"
           python3 bot.py
 
-      - name: Commit DNA & Journal State
+      - name: Commit and Push Updated State Cache
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: auto-update V24.6.1 DNA & trade history [skip ci]"
           file_pattern: "**/*.json"
-          commit_options: "--no-verify"
+          commit_author: "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
