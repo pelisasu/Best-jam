@@ -1,0 +1,14 @@
+# Python temporary files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# State Cache PNG & DB files (hanya .json yang dicommit)
+.state_cache/*.db
+.state_cache/*.png
+
+# Virtual Environment & IDEs
+.venv/
+venv/
+.vscode/
+.idea/
