@@ -2033,5 +2033,59 @@
     },
     "evaluated": true,
     "result": "LOSS"
+  },
+  {
+    "time": "2026-10-10T02:00:55.341633+07:00",
+    "signal": "BUY",
+    "price": 4184.10009765625,
+    "sl": 4175.93,
+    "tp1": 4194.72,
+    "tp2": 4202.08,
+    "tp3": 4212.7,
+    "tp4": 4224.96,
+    "consensus": 100.0,
+    "engine_states": {
+      "NADI": {
+        "sc": 1,
+        "weight_used": 1.5
+      },
+      "SAWAH": {
+        "sc": 1,
+        "weight_used": 1.5
+      },
+      "SEMUT": {
+        "sc": 1,
+        "weight_used": 1.2
+      },
+      "PADI": {
+        "sc": 1,
+        "weight_used": 1.3
+      },
+      "AKAR": {
+        "sc": 1,
+        "weight_used": 1.8
+      },
+      "WAYANG": {
+        "sc": 1,
+        "weight_used": 1.0
+      },
+      "LUMPUR": {
+        "sc": 0,
+        "weight_used": 1.1
+      },
+      "API": {
+        "sc": 1,
+        "weight_used": 1.0
+      },
+      "ANGIN": {
+        "sc": 1,
+        "weight_used": 1.0
+      },
+      "EMBER": {
+        "sc": 1,
+        "weight_used": 1.0
+      }
+    },
+    "evaluated": false
   }
 ]
