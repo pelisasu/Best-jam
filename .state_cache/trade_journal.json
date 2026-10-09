@@ -2031,6 +2031,7 @@
         "weight_used": 1.0
       }
     },
-    "evaluated": false
+    "evaluated": true,
+    "result": "LOSS"
   }
 ]
