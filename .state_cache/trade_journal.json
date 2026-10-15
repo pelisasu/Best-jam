@@ -1,60 +1,5 @@
 [
   {
-    "time": "2026-09-30T06:13:48.088909+07:00",
-    "signal": "BUY",
-    "price": 4171.5,
-    "sl": 4164.3,
-    "tp1": 4180.86,
-    "tp2": 4187.34,
-    "tp3": 4196.7,
-    "tp4": 4207.5,
-    "consensus": 100.0,
-    "engine_states": {
-      "NADI": {
-        "sc": 1,
-        "weight_used": 1.5
-      },
-      "SAWAH": {
-        "sc": 1,
-        "weight_used": 1.5
-      },
-      "SEMUT": {
-        "sc": 1,
-        "weight_used": 1.2
-      },
-      "PADI": {
-        "sc": 1,
-        "weight_used": 1.3
-      },
-      "AKAR": {
-        "sc": 1,
-        "weight_used": 1.8
-      },
-      "WAYANG": {
-        "sc": 1,
-        "weight_used": 1.0
-      },
-      "LUMPUR": {
-        "sc": 0,
-        "weight_used": 1.1
-      },
-      "API": {
-        "sc": 0,
-        "weight_used": 1.0
-      },
-      "ANGIN": {
-        "sc": 1,
-        "weight_used": 1.0
-      },
-      "EMBER": {
-        "sc": 1,
-        "weight_used": 1.0
-      }
-    },
-    "evaluated": true,
-    "result": "LOSS"
-  },
-  {
     "time": "2026-09-30T09:07:49.783871+07:00",
     "signal": "BUY",
     "price": 4161.60009765625,
@@ -2743,6 +2688,61 @@
       },
       "EMBER": {
         "sc": 1,
+        "weight_used": 1.0
+      }
+    },
+    "evaluated": true,
+    "result": "LOSS"
+  },
+  {
+    "time": "2026-10-16T06:59:36.072864+07:00",
+    "signal": "BUY",
+    "price": 4137.0,
+    "sl": 4129.8,
+    "tp1": 4146.36,
+    "tp2": 4152.84,
+    "tp3": 4162.2,
+    "tp4": 4173.0,
+    "consensus": 75.0,
+    "engine_states": {
+      "NADI": {
+        "sc": 0,
+        "weight_used": 1.5
+      },
+      "SAWAH": {
+        "sc": 0,
+        "weight_used": 1.5
+      },
+      "SEMUT": {
+        "sc": 1,
+        "weight_used": 1.2
+      },
+      "PADI": {
+        "sc": 0,
+        "weight_used": 1.3
+      },
+      "AKAR": {
+        "sc": 1,
+        "weight_used": 1.8
+      },
+      "WAYANG": {
+        "sc": -1,
+        "weight_used": 1.0
+      },
+      "LUMPUR": {
+        "sc": 0,
+        "weight_used": 1.1
+      },
+      "API": {
+        "sc": 0,
+        "weight_used": 1.0
+      },
+      "ANGIN": {
+        "sc": 1,
+        "weight_used": 1.0
+      },
+      "EMBER": {
+        "sc": -1,
         "weight_used": 1.0
       }
     },
