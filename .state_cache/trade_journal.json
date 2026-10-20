@@ -1,60 +1,5 @@
 [
   {
-    "time": "2026-10-03T08:11:20.950140+07:00",
-    "signal": "SELL",
-    "price": 4130.60009765625,
-    "sl": 4138.72,
-    "tp1": 4120.04,
-    "tp2": 4112.73,
-    "tp3": 4102.16,
-    "tp4": 4089.98,
-    "consensus": 67.67,
-    "engine_states": {
-      "NADI": {
-        "sc": -1,
-        "weight_used": 1.5
-      },
-      "SAWAH": {
-        "sc": -1,
-        "weight_used": 1.5
-      },
-      "SEMUT": {
-        "sc": -1,
-        "weight_used": 1.2
-      },
-      "PADI": {
-        "sc": 1,
-        "weight_used": 1.3
-      },
-      "AKAR": {
-        "sc": -1,
-        "weight_used": 1.8
-      },
-      "WAYANG": {
-        "sc": 1,
-        "weight_used": 1.0
-      },
-      "LUMPUR": {
-        "sc": 0,
-        "weight_used": 1.1
-      },
-      "API": {
-        "sc": 1,
-        "weight_used": 1.0
-      },
-      "ANGIN": {
-        "sc": 1,
-        "weight_used": 1.0
-      },
-      "EMBER": {
-        "sc": -1,
-        "weight_used": 1.0
-      }
-    },
-    "evaluated": true,
-    "result": "DRAW"
-  },
-  {
     "time": "2026-10-05T09:59:41.994857+07:00",
     "signal": "SELL",
     "price": 4136.7998046875,
@@ -2691,7 +2636,8 @@
         "weight_used": 1.0
       }
     },
-    "evaluated": false
+    "evaluated": true,
+    "result": "WIN"
   },
   {
     "time": "2026-10-20T15:02:28.484363+07:00",
@@ -2738,6 +2684,60 @@
       },
       "ANGIN": {
         "sc": -1,
+        "weight_used": 1.0
+      },
+      "EMBER": {
+        "sc": -1,
+        "weight_used": 1.0
+      }
+    },
+    "evaluated": false
+  },
+  {
+    "time": "2026-10-20T20:33:40.716592+07:00",
+    "signal": "SELL",
+    "price": 4096.2001953125,
+    "sl": 4107.6,
+    "tp1": 4081.38,
+    "tp2": 4071.12,
+    "tp3": 4056.29,
+    "tp4": 4039.19,
+    "consensus": 75.19,
+    "engine_states": {
+      "NADI": {
+        "sc": -1,
+        "weight_used": 1.5
+      },
+      "SAWAH": {
+        "sc": -1,
+        "weight_used": 1.5
+      },
+      "SEMUT": {
+        "sc": -1,
+        "weight_used": 1.2
+      },
+      "PADI": {
+        "sc": 1,
+        "weight_used": 1.3
+      },
+      "AKAR": {
+        "sc": -1,
+        "weight_used": 1.8
+      },
+      "WAYANG": {
+        "sc": -1,
+        "weight_used": 1.0
+      },
+      "LUMPUR": {
+        "sc": 0,
+        "weight_used": 1.1
+      },
+      "API": {
+        "sc": 1,
+        "weight_used": 1.0
+      },
+      "ANGIN": {
+        "sc": 1,
         "weight_used": 1.0
       },
       "EMBER": {
