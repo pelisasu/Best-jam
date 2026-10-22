@@ -1,60 +1,5 @@
 [
   {
-    "time": "2026-10-09T07:20:55.203088+07:00",
-    "signal": "BUY",
-    "price": 4127.60009765625,
-    "sl": 4120.4,
-    "tp1": 4136.96,
-    "tp2": 4143.44,
-    "tp3": 4152.8,
-    "tp4": 4163.6,
-    "consensus": 84.33,
-    "engine_states": {
-      "NADI": {
-        "sc": 1,
-        "weight_used": 1.5
-      },
-      "SAWAH": {
-        "sc": 1,
-        "weight_used": 1.5
-      },
-      "SEMUT": {
-        "sc": 1,
-        "weight_used": 1.2
-      },
-      "PADI": {
-        "sc": 1,
-        "weight_used": 1.3
-      },
-      "AKAR": {
-        "sc": 1,
-        "weight_used": 1.8
-      },
-      "WAYANG": {
-        "sc": 1,
-        "weight_used": 1.0
-      },
-      "LUMPUR": {
-        "sc": -1,
-        "weight_used": 1.1
-      },
-      "API": {
-        "sc": 0,
-        "weight_used": 1.0
-      },
-      "ANGIN": {
-        "sc": -1,
-        "weight_used": 1.0
-      },
-      "EMBER": {
-        "sc": 1,
-        "weight_used": 1.0
-      }
-    },
-    "evaluated": true,
-    "result": "WIN"
-  },
-  {
     "time": "2026-10-09T13:25:35.669026+07:00",
     "signal": "BUY",
     "price": 4176.10009765625,
@@ -2719,6 +2664,61 @@
       },
       "PADI": {
         "sc": 0,
+        "weight_used": 1.3
+      },
+      "AKAR": {
+        "sc": -1,
+        "weight_used": 1.8
+      },
+      "WAYANG": {
+        "sc": -1,
+        "weight_used": 1.0
+      },
+      "LUMPUR": {
+        "sc": 0,
+        "weight_used": 1.1
+      },
+      "API": {
+        "sc": 0,
+        "weight_used": 1.0
+      },
+      "ANGIN": {
+        "sc": 0,
+        "weight_used": 1.0
+      },
+      "EMBER": {
+        "sc": -1,
+        "weight_used": 1.0
+      }
+    },
+    "evaluated": true,
+    "result": "WIN"
+  },
+  {
+    "time": "2026-10-23T02:20:20.587838+07:00",
+    "signal": "SELL",
+    "price": 4002.199951171875,
+    "sl": 4012.71,
+    "tp1": 3988.53,
+    "tp2": 3979.07,
+    "tp3": 3965.4,
+    "tp4": 3949.63,
+    "consensus": 100.0,
+    "engine_states": {
+      "NADI": {
+        "sc": -1,
+        "weight_used": 1.5
+      },
+      "SAWAH": {
+        "sc": -1,
+        "weight_used": 1.5
+      },
+      "SEMUT": {
+        "sc": -1,
+        "weight_used": 1.2
+      },
+      "PADI": {
+        "sc": -1,
         "weight_used": 1.3
       },
       "AKAR": {
